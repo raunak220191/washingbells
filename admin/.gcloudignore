@@ -1,0 +1,7 @@
+# Not uploaded to Cloud Build (deps reinstalled in-image via npm ci)
+node_modules
+.next
+.env.local
+.git
+.DS_Store
+npm-debug.log*

@@ -1,0 +1,324 @@
+# ============================================================
+# WashingBells — Master Rate List
+# ============================================================
+# Admin: Edit prices here. Backend reads this on service seed.
+# After editing, delete the "services" collection in MongoDB
+# and restart the backend to re-seed with new prices.
+#
+# category: one of  men | women | kids | unisex | home | footwear | accessories | other
+#   unisex = generic apparel, shown under every gender tab (default).
+#   home   = household linens & furnishings (curtains, bedsheets, sofa…).
+# ============================================================
+
+services:
+  - name: Dry Clean
+    slug: dry-clean
+    description: Professional dry cleaning for delicate fabrics
+    icon: shirt-outline
+    pricing_unit: piece
+    service_type: pickup_drop
+    items:
+      - id: dc_shirt
+        name: Shirt
+        price: 80
+        category: unisex
+      - id: dc_tshirt
+        name: T-Shirt
+        price: 70
+        category: unisex
+      - id: dc_trousers
+        name: Trousers
+        price: 90
+        category: unisex
+      - id: dc_jeans
+        name: Jeans
+        price: 100
+        category: unisex
+      - id: dc_suit
+        name: Suit (2pc)
+        price: 350
+        category: men
+      - id: dc_blazer
+        name: Blazer
+        price: 250
+        category: men
+      - id: dc_sherwani
+        name: Sherwani
+        price: 450
+        category: men
+      - id: dc_saree
+        name: Saree
+        price: 200
+        category: women
+      - id: dc_lehenga
+        name: Lehenga
+        price: 500
+        category: women
+      - id: dc_salwar
+        name: Salwar Suit
+        price: 220
+        category: women
+      - id: dc_kurta
+        name: Kurta
+        price: 120
+        category: unisex
+      - id: dc_jacket
+        name: Jacket
+        price: 300
+        category: unisex
+      - id: dc_sweater
+        name: Sweater
+        price: 150
+        category: unisex
+      - id: dc_kids_dress
+        name: Kids Dress / Frock
+        price: 90
+        category: kids
+      - id: dc_kids_uniform
+        name: School Uniform Set
+        price: 100
+        category: kids
+      - id: dc_handbag
+        name: Handbag / Purse
+        price: 250
+        category: accessories
+      - id: dc_tie
+        name: Tie
+        price: 50
+        category: accessories
+      - id: dc_cap
+        name: Cap / Hat
+        price: 60
+        category: accessories
+      - id: dc_soft_toy
+        name: Soft Toy
+        price: 150
+        category: accessories
+
+  - name: Wash & Steam Iron
+    slug: wash-steam-iron
+    description: Wash and professional steam pressing
+    icon: water-outline
+    pricing_unit: piece
+    service_type: pickup_drop
+    items:
+      - id: wsi_shirt
+        name: Shirt
+        price: 40
+        category: unisex
+      - id: wsi_tshirt
+        name: T-Shirt
+        price: 35
+        category: unisex
+      - id: wsi_trousers
+        name: Trousers
+        price: 45
+        category: unisex
+      - id: wsi_jeans
+        name: Jeans
+        price: 50
+        category: unisex
+      - id: wsi_kurta
+        name: Kurta
+        price: 50
+        category: unisex
+      - id: wsi_saree
+        name: Saree
+        price: 70
+        category: women
+      - id: wsi_kids_set
+        name: Kids Clothing Set
+        price: 40
+        category: kids
+      - id: wsi_bedsheet
+        name: Bedsheet (Single)
+        price: 60
+        category: home
+      - id: wsi_bedsheet_d
+        name: Bedsheet (Double)
+        price: 80
+        category: home
+      - id: wsi_curtain
+        name: Curtain (per panel)
+        price: 100
+        category: home
+      - id: wsi_towel
+        name: Towel
+        price: 30
+        category: home
+
+  - name: Wash & Fold
+    slug: wash-fold
+    description: Machine wash, tumble dry, and neatly folded
+    icon: layers-outline
+    pricing_unit: piece
+    service_type: pickup_drop
+    items:
+      - id: wf_shirt
+        name: Shirt
+        price: 25
+        category: unisex
+      - id: wf_tshirt
+        name: T-Shirt
+        price: 20
+        category: unisex
+      - id: wf_trousers
+        name: Trousers
+        price: 30
+        category: unisex
+      - id: wf_jeans
+        name: Jeans
+        price: 35
+        category: unisex
+      - id: wf_kurta
+        name: Kurta
+        price: 30
+        category: unisex
+      - id: wf_kids_set
+        name: Kids Clothing Set
+        price: 18
+        category: kids
+      - id: wf_towel
+        name: Towel
+        price: 20
+        category: home
+      - id: wf_bedsheet
+        name: Bedsheet (Single)
+        price: 40
+        category: home
+      - id: wf_bedsheet_d
+        name: Bedsheet (Double)
+        price: 55
+        category: home
+
+  - name: Shoe Cleaning
+    slug: shoe-cleaning
+    description: Deep clean and restore your shoes
+    icon: footsteps-outline
+    pricing_unit: pair
+    service_type: pickup_drop
+    items:
+      - id: sc_sneakers
+        name: Sneakers
+        price: 250
+        category: footwear
+      - id: sc_leather
+        name: Leather Shoes
+        price: 300
+        category: footwear
+      - id: sc_sports
+        name: Sports Shoes
+        price: 200
+        category: footwear
+      - id: sc_heels
+        name: Heels / Ladies Footwear
+        price: 220
+        category: footwear
+      - id: sc_sandals
+        name: Sandals
+        price: 150
+        category: footwear
+      - id: sc_kids
+        name: Kids Shoes
+        price: 120
+        category: footwear
+      - id: sc_boots
+        name: Boots
+        price: 350
+        category: footwear
+
+  - name: Steam Iron
+    slug: steam-iron
+    description: Professional steam ironing only
+    icon: thermometer-outline
+    pricing_unit: piece
+    service_type: pickup_drop
+    items:
+      - id: si_shirt
+        name: Shirt
+        price: 15
+        category: unisex
+      - id: si_tshirt
+        name: T-Shirt
+        price: 12
+        category: unisex
+      - id: si_trousers
+        name: Trousers
+        price: 18
+        category: unisex
+      - id: si_kurta
+        name: Kurta
+        price: 20
+        category: unisex
+      - id: si_saree
+        name: Saree
+        price: 30
+        category: women
+      - id: si_suit
+        name: Suit (2pc)
+        price: 50
+        category: men
+      - id: si_kids
+        name: Kids Garment
+        price: 12
+        category: kids
+
+  - name: Premium Laundry
+    slug: premium-laundry
+    description: Premium wash service — priced per KG for mixed loads
+    icon: diamond-outline
+    pricing_unit: kg
+    service_type: pickup_drop
+    items:
+      - id: pl_regular
+        name: Regular Clothes
+        price: 89
+        category: unisex
+      - id: pl_delicate
+        name: Delicates
+        price: 129
+        category: unisex
+      - id: pl_heavy
+        name: Heavy Fabrics (Blankets, Curtains)
+        price: 149
+        category: home
+
+  - name: Sofa Cleaning
+    slug: sofa-cleaning
+    description: Professional at-home sofa and upholstery cleaning
+    icon: tv-outline
+    pricing_unit: piece
+    service_type: at_home
+    items:
+      - id: sofa_1s
+        name: 1-Seater Sofa
+        price: 499
+        category: home
+      - id: sofa_2s
+        name: 2-Seater Sofa
+        price: 799
+        category: home
+      - id: sofa_3s
+        name: 3-Seater Sofa
+        price: 1099
+        category: home
+      - id: sofa_lshape
+        name: L-Shape Sofa
+        price: 1999
+        category: home
+      - id: sofa_chair
+        name: Arm Chair
+        price: 399
+        category: home
+      - id: sofa_mattress_s
+        name: Mattress (Single)
+        price: 599
+        category: home
+      - id: sofa_mattress_d
+        name: Mattress (Double)
+        price: 899
+        category: home
+      - id: sofa_carpet
+        name: Carpet (per sq.ft)
+        price: 15
+        category: home

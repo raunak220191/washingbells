@@ -1,0 +1,77 @@
+{
+  "expo": {
+    "name": "WashingBells",
+    "slug": "WashingBells",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#F5F5F2"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "icon": "./assets/icon-ios.png",
+      "bundleIdentifier": "com.washingbells.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false,
+        "NSLocationWhenInUseUsageDescription": "WashingBells needs your location to find nearby services and auto-fill your delivery address."
+      }
+    },
+    "android": {
+      "package": "com.washingbells.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#006241",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "permissions": [
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION",
+        "POST_NOTIFICATIONS",
+        "VIBRATE",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
+    },
+    "scheme": "washingbells",
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-secure-store",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "WashingBells needs your location to auto-fill your delivery address.",
+          "locationAlwaysPermission": "Allow WashingBells to use your location to deliver your laundry."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/icon.png",
+          "color": "#006241",
+          "defaultChannel": "default"
+        }
+      ],
+      "expo-font"
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "397dcb5c-fde6-4a2b-a341-e1c31c58ad60"
+      }
+    },
+    "owner": "rp2201"
+  }
+}

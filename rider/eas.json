@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 12.0.0",
+    "appVersionSource": "remote"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal"
+    },
+    "preview": {
+      "distribution": "internal",
+      "android": { "buildType": "apk" }
+    },
+    "production": {
+      "autoIncrement": true
+    }
+  },
+  "submit": {
+    "production": {
+      "android": {
+        "serviceAccountKeyPath": "./play-service-account.json",
+        "track": "internal"
+      },
+      "ios": {
+        "ascApiKeyId": "L6HNMZ4MQ5",
+        "ascApiKeyIssuerId": "dbf14e6b-4e23-4595-be6c-6ac0a022ddc2",
+        "ascApiKeyPath": "../asc-api-key.p8",
+        "ascAppId": "6783028830"
+      }
+    }
+  }
+}

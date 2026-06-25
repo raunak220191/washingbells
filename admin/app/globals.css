@@ -1,0 +1,55 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f5f5f2;
+  --foreground: #1a2b22;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+/*
+ * Washing Bells brand palette.
+ * The dashboard was amber-accented; we remap the built-in `amber` scale to a
+ * gold ramp so every existing amber-* utility (CTAs, active states, focus
+ * rings, ~360 usages) becomes brand gold with no per-file edits. Brand green
+ * tokens (brand/forest/sage/olive/gold) are added for chrome + logo.
+ */
+@theme {
+  --color-brand: #006241; /* Deep Emerald */
+  --color-forest: #003d2b; /* Dark Forest */
+  --color-gold: #bfa14a; /* Gold */
+  --color-sage: #cfe3d8; /* Pale Sage */
+  --color-olive: #a8c86b; /* Soft Olive */
+
+  /* amber -> gold ramp */
+  --color-amber-50: #faf6ec;
+  --color-amber-100: #f3ebcf;
+  --color-amber-200: #e8d9a8;
+  --color-amber-300: #dbc47d;
+  --color-amber-400: #ccb05f;
+  --color-amber-500: #bfa14a;
+  --color-amber-600: #9a7f38;
+  --color-amber-700: #7c662e;
+  --color-amber-800: #5f4f26;
+  --color-amber-900: #463b1f;
+  --color-amber-950: #2a2312;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* keep the admin light — it was built light-first; avoid washed dark mode */
+    --background: #f5f5f2;
+    --foreground: #1a2b22;
+  }
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans), Arial, Helvetica, sans-serif;
+}

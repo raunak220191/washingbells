@@ -1,0 +1,28 @@
+
+[0;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+[0;36m  🧺 WashingBells — Full Restart[0m
+[0;36m━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━[0m
+
+[1;33m[1/6] Killing existing services...[0m
+[0;32m  ✓ All ports cleared[0m
+[1;33m[2/6] Starting MongoDB...[0m
+washingbells-mongo
+[0;32m  ✓ MongoDB: Up 4 weeks[0m
+[1;33m[3/6] Starting FastAPI backend...[0m
+INFO:     Will watch for changes in these directories: ['/Users/raunakpandey/Downloads/WashingBells/backend']
+INFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)
+INFO:     Started reloader process [2623] using WatchFiles
+INFO:     Started server process [2626]
+INFO:     Waiting for application startup.
+INFO:     Application startup complete.
+✅ Connected to MongoDB: washingbells
+INFO:     127.0.0.1:55630 - "GET /health HTTP/1.1" 200 OK
+[0;32m  ✓ Backend running on :8000 (PID 2623)[0m
+[1;33m[4/6] Starting Cloudflare tunnel...[0m
+[0;32m  ✓ Tunnel: https://collectibles-parker-elder-elliott.trycloudflare.com[0m
+[1;33m[5/6] Updating config/dev.js...[0m
+  ✓ config/dev.js → https://collectibles-parker-elder-elliott.trycloudflare.com
+[1;33m[6/6] Verifying tunnel...[0m
+INFO:     2401:4900:1c66:a27e:35c6:4f5e:348d:2866:0 - "GET / HTTP/1.1" 200 OK
+INFO:     2401:4900:1c66:a27e:35c6:4f5e:348d:2866:0 - "GET /favicon.ico HTTP/1.1" 404 Not Found
+INFO:     2401:4900:1c66:a27e:35c6:4f5e:348d:2866:0 - "GET / HTTP/1.1" 200 OK

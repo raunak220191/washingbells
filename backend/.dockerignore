@@ -1,0 +1,18 @@
+# Keep dev-only secrets/config OUT of the image so prod reads from
+# Cloud Run env vars + Secret Manager (pydantic BaseSettings reads env).
+.env
+.env.example
+dev.yaml
+
+# Caches / cruft
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.venv/
+venv/
+.git/
+.DS_Store
+Dockerfile
+.dockerignore
+.gcloudignore

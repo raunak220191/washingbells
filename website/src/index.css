@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    color-scheme: light;
+  }
+
+  html {
+    scroll-behavior: smooth;
+    /* offset anchor targets below the sticky nav */
+    scroll-padding-top: 96px;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    @apply bg-sand text-ink font-sans antialiased;
+    font-feature-settings: "ss01", "cv11";
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4 {
+    @apply font-display;
+    letter-spacing: -0.02em;
+    text-wrap: balance;
+  }
+
+  /* Snappier taps on touch devices — no 300ms delay, no double-tap zoom */
+  a,
+  button,
+  [role="button"],
+  [role="switch"],
+  summary {
+    touch-action: manipulation;
+  }
+
+  /* Visible, on-brand focus ring for keyboard users */
+  :where(a, button, [tabindex], input, summary):focus-visible {
+    outline: 3px solid theme("colors.tide");
+    outline-offset: 3px;
+    border-radius: 6px;
+  }
+
+  ::selection {
+    background: theme("colors.zest");
+    color: theme("colors.ink");
+  }
+}
+
+@layer components {
+  .container-bells {
+    @apply mx-auto w-full max-w-content px-5 sm:px-8;
+  }
+
+  /* Primary CTA — sunshine */
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill bg-zest px-7 py-3.5
+      font-sans text-base font-700 text-ink shadow-zest
+      transition-[transform,box-shadow] duration-300 ease-brand
+      hover:-translate-y-0.5 hover:shadow-[0_22px_44px_-12px_rgba(255,178,0,0.6)]
+      active:translate-y-0;
+  }
+
+  /* Secondary CTA — calm water outline */
+  .btn-ghost {
+    @apply inline-flex items-center justify-center gap-2 rounded-pill border border-ink/15
+      bg-white/60 px-7 py-3.5 font-sans text-base font-600 text-ink backdrop-blur
+      transition-[transform,box-shadow,background-color] duration-300 ease-brand
+      hover:-translate-y-0.5 hover:border-tide/40 hover:bg-white hover:shadow-tide-sm
+      active:translate-y-0;
+  }
+
+  .eyebrow {
+    @apply inline-flex items-center gap-2 rounded-pill bg-foam px-4 py-1.5
+      font-sans text-xs font-700 uppercase tracking-[0.16em] text-tide;
+  }
+
+  .section-pad {
+    @apply py-20 sm:py-28 lg:py-36;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

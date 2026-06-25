@@ -1,0 +1,11 @@
+node_modules
+.next
+# Keep dev API URL (localhost) OUT — prod URL is baked via build ARG
+.env.local
+*.local
+.git
+.DS_Store
+npm-debug.log*
+Dockerfile
+.dockerignore
+.gcloudignore

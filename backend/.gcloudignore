@@ -1,0 +1,12 @@
+# Files NOT uploaded to Cloud Build. Keeps dev secrets and caches out of
+# the build context entirely.
+.env
+.env.example
+dev.yaml
+__pycache__/
+*.pyc
+*.log
+.venv/
+venv/
+.git/
+.DS_Store

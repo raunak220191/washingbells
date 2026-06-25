@@ -1,0 +1,25 @@
+# Scope the EAS build to the customer app only.
+# Sibling apps / services — NOT part of the customer app:
+admin/
+backend/
+rider/
+store/
+website/
+logos/
+
+# Deps & build artifacts (reinstalled/regenerated on EAS build servers):
+node_modules/
+dist/
+.expo/
+web-build/
+
+# Misc
+docs/
+*.bak
+*.log
+.DS_Store
+
+# Secrets — never upload signing/submit keys
+play-service-account.json
+*.p8
+asc-api-key.p8
