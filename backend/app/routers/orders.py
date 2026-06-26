@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timezone
 from bson import ObjectId
+from bson.errors import InvalidId
 import random, string, math
 from app.core.database import get_db
 from app.core.security import get_current_user
@@ -12,6 +13,17 @@ from app.services.email_service import send_event as send_email_event
 router = APIRouter(prefix="/orders", tags=["Orders"])
 FREE_DELIVERY_THRESHOLD = 299.0
 DELIVERY_FEE = 40.0
+
+def _safe_oid(value, what):
+    """Parse an ObjectId or raise a clean 400. Without this a malformed id (e.g.
+    a stale/blank store or address id from the client) makes ObjectId() raise
+    InvalidId, which surfaces as an opaque 500 — the app then shows its generic
+    'Failed to place order.' fallback instead of a useful message."""
+    try:
+        return ObjectId(value)
+    except (InvalidId, TypeError):
+        raise HTTPException(status_code=400, detail=f"Invalid {what}. Please re-select and try again.")
+
 
 def _generate_order_number():
     suffix = "".join(random.choices(string.ascii_uppercase + string.digits, k=4))
@@ -92,7 +104,7 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     cart_response = await _build_cart_response(db, user_id)
     if not cart_response.items:
         raise HTTPException(status_code=400, detail="Cart is empty")
-    address = await db.addresses.find_one({"_id": ObjectId(order_data.address_id), "user_id": user_id})
+    address = await db.addresses.find_one({"_id": _safe_oid(order_data.address_id, "address"), "user_id": user_id})
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
     subtotal = cart_response.total_amount
@@ -135,7 +147,7 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     }
     # Assign store: use customer-selected store_id if provided, else auto-assign nearest
     if order_data.store_id:
-        selected_store = await db.stores.find_one({"_id": ObjectId(order_data.store_id), "status": "active"})
+        selected_store = await db.stores.find_one({"_id": _safe_oid(order_data.store_id, "store selection"), "status": "active"})
         if not selected_store:
             raise HTTPException(status_code=404, detail="Selected store not found or inactive")
         order_doc["store_id"] = order_data.store_id
