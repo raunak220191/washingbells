@@ -112,7 +112,7 @@ export default function BasketScreen() {
         <View style={styles.footer}>
           {/* Price Breakdown */}
           <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Subtotal ({totalItems} items)</Text>
+            <Text style={styles.priceLabel}>Subtotal ({totalItems} {totalItems === 1 ? "item" : "items"})</Text>
             <Text style={styles.priceValue}>₹{totalAmount.toFixed(2)}</Text>
           </View>
           <View style={styles.priceRow}>
