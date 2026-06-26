@@ -24,15 +24,14 @@ import {
   Platform,
   Animated,
   Dimensions,
-  StatusBar,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, Feather, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
 import { useAddressStore } from "../../../stores/addressStore";
 import Button from "../../../components/common/Button";
+import Screen from "../../../components/common/Screen";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -721,9 +720,7 @@ export default function AddressScreen() {
 
   // ─── MAIN RENDER ────────────────────────────────────────
   return (
-    <SafeAreaView style={s.container}>
-      <StatusBar barStyle="dark-content" />
-
+    <Screen padded={false}>
       {/* ── Header ── */}
       <View style={s.header}>
         <TouchableOpacity
@@ -782,22 +779,23 @@ export default function AddressScreen() {
       <View style={s.body}>
         {mode === "list" ? renderList() : renderForm()}
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 // ───────────────────────────────────────────────────────────
 // STYLES
 // ───────────────────────────────────────────────────────────
+// Brand-tinted soft shadows (no flat neutral/black drop shadows — see design system).
 const CARD_SHADOW = {
-  shadowColor: "#1A1A1A",
+  shadowColor: COLORS.darkForest,
   shadowOffset: { width: 0, height: 2 },
   shadowOpacity: 0.06,
   shadowRadius: 8,
   elevation: 3,
 };
 const CARD_SHADOW_LG = {
-  shadowColor: "#1A1A1A",
+  shadowColor: COLORS.darkForest,
   shadowOffset: { width: 0, height: 4 },
   shadowOpacity: 0.1,
   shadowRadius: 16,
