@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import * as SecureStore from "expo-secure-store";
+import * as SecureStore from "../lib/secureStore";
 import api from "../lib/api";
 import { registerForPushNotifications, unregisterPushNotifications } from "../lib/pushNotifications";
 

@@ -1,0 +1,10 @@
+{
+  "name": "run-washingbells-driver",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Self-contained Playwright driver for the WashingBells customer app (expo web).",
+  "dependencies": {
+    "playwright": "^1.61.1"
+  }
+}
