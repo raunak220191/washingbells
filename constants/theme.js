@@ -89,9 +89,27 @@ export const ORDER_STATUS_LABELS = {
   pending_payment: "Pending Payment",
   confirmed: "Confirmed",
   picked_up: "Picked Up",
+  at_store: "At Store",
   processing: "Processing",
+  ready_for_delivery: "Ready for Delivery",
   out_for_delivery: "Out for Delivery",
   delivered: "Delivered",
   cancelled: "Cancelled",
   rejected: "Not Accepted",
+};
+
+// Single source of truth for order-status badge colors. Every status in the
+// backend lifecycle is mapped so badges never fall back to raw grey text.
+export const ORDER_STATUS_COLORS = {
+  placed: COLORS.warning,
+  pending_payment: COLORS.warning,
+  confirmed: COLORS.info,
+  picked_up: COLORS.pickedUp,
+  at_store: COLORS.processing,
+  processing: COLORS.processing,
+  ready_for_delivery: COLORS.info,
+  out_for_delivery: COLORS.outForDelivery,
+  delivered: COLORS.delivered,
+  cancelled: COLORS.cancelled,
+  rejected: COLORS.error,
 };

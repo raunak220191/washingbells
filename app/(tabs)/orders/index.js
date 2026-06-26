@@ -10,18 +10,12 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, ORDER_STATUS_LABELS } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "../../../constants/theme";
 import { useOrderStore } from "../../../stores/orderStore";
 
-const STATUS_COLORS = {
-  pending_payment: COLORS.warning,
-  confirmed: COLORS.info,
-  picked_up: "#5856D6",
-  processing: "#AF52DE",
-  out_for_delivery: COLORS.success,
-  delivered: COLORS.success,
-  cancelled: COLORS.error,
-};
+// Status badge colors live in the theme (single source of truth) so the list
+// and the order-detail screen stay in sync and cover every backend status.
+const STATUS_COLORS = ORDER_STATUS_COLORS;
 
 export default function OrdersScreen() {
   const router = useRouter();

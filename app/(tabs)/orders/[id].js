@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIn
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "../../../constants/theme";
 import { useOrderStore } from "../../../stores/orderStore";
 import RescheduleModal from "../../../components/RescheduleModal";
 import api from "../../../lib/api";
@@ -93,8 +93,8 @@ export default function OrderDetailScreen() {
               <Text style={styles.orderNumber}>{order.order_number}</Text>
               <Text style={styles.orderDate}>{new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: order.status === "delivered" ? COLORS.success : order.status === "cancelled" ? COLORS.error : COLORS.gold }]}>
-              <Text style={styles.statusText}>{order.status.replace(/_/g, " ").toUpperCase()}</Text>
+            <View style={[styles.statusBadge, { backgroundColor: ORDER_STATUS_COLORS[order.status] || COLORS.gold }]}>
+              <Text style={styles.statusText}>{(ORDER_STATUS_LABELS[order.status] || order.status.replace(/_/g, " ")).toUpperCase()}</Text>
             </View>
           </View>
           <Text style={styles.totalAmount}>₹{order.total_amount.toFixed(2)}</Text>
