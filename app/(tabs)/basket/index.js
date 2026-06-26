@@ -7,13 +7,16 @@ import {
   TouchableOpacity,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TYPE, ICON, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
 import { useCartStore } from "../../../stores/cartStore";
 import QuantityStepper from "../../../components/common/QuantityStepper";
 import Button from "../../../components/common/Button";
+import Screen from "../../../components/common/Screen";
+import Card from "../../../components/common/Card";
+import PriceRow from "../../../components/common/PriceRow";
+import BottomBar from "../../../components/common/BottomBar";
 
 export default function BasketScreen() {
   const router = useRouter();
@@ -36,12 +39,12 @@ export default function BasketScreen() {
   // Empty state
   if (!isLoading && items.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <Screen>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Your Basket</Text>
         </View>
         <View style={styles.emptyState}>
-          <Ionicons name="basket-outline" size={80} color={COLORS.border} />
+          <Ionicons name="basket-outline" size={ICON.hero} color={COLORS.mintGreen} />
           <Text style={styles.emptyTitle}>Your basket is empty</Text>
           <Text style={styles.emptySub}>Add items from our services to get started</Text>
           <Button
@@ -50,30 +53,31 @@ export default function BasketScreen() {
             style={{ marginTop: SPACING.xl }}
           />
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      {/* Header */}
+    <Screen padded={false}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Your Basket</Text>
         {items.length > 0 && (
-          <TouchableOpacity onPress={handleClearCart}>
+          <TouchableOpacity
+            onPress={handleClearCart}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
             <Text style={styles.clearText}>Clear All</Text>
           </TouchableOpacity>
         )}
       </View>
 
-      {/* Items */}
       <FlatList
         data={items}
         keyExtractor={(item) => `${item.service_id}_${item.item_id}`}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 220 }}
+        contentContainerStyle={styles.listContent}
         renderItem={({ item }) => (
-          <View style={styles.itemCard}>
+          <Card style={styles.itemCard}>
             <View style={styles.itemTop}>
               <View style={styles.itemInfo}>
                 <Text style={styles.serviceBadge}>{item.service_name}</Text>
@@ -83,8 +87,10 @@ export default function BasketScreen() {
               <TouchableOpacity
                 onPress={() => removeItem(item.service_id, item.item_id)}
                 style={styles.removeBtn}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                accessibilityLabel={`Remove ${item.item_name}`}
               >
-                <Ionicons name="trash-outline" size={18} color={COLORS.error} />
+                <Ionicons name="trash-outline" size={ICON.xs} color={COLORS.error} />
               </TouchableOpacity>
             </View>
 
@@ -103,66 +109,49 @@ export default function BasketScreen() {
               />
               <Text style={styles.itemSubtotal}>₹{item.subtotal}</Text>
             </View>
-          </View>
+          </Card>
         )}
       />
 
-      {/* Pricing Footer */}
       {items.length > 0 && (
-        <View style={styles.footer}>
-          {/* Price Breakdown */}
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Subtotal ({totalItems} {totalItems === 1 ? "item" : "items"})</Text>
-            <Text style={styles.priceValue}>₹{totalAmount.toFixed(2)}</Text>
-          </View>
-          <View style={styles.priceRow}>
-            <Text style={styles.priceLabel}>Delivery Fee</Text>
-            {deliveryFee === 0 ? (
-              <Text style={[styles.priceValue, { color: COLORS.success }]}>FREE</Text>
-            ) : (
-              <Text style={styles.priceValue}>₹{deliveryFee}</Text>
-            )}
-          </View>
+        <BottomBar>
+          <PriceRow
+            label={`Subtotal (${totalItems} ${totalItems === 1 ? "item" : "items"})`}
+            value={totalAmount}
+          />
+          <PriceRow label="Delivery Fee" value={deliveryFee} free={deliveryFee === 0} />
           {deliveryFee > 0 && (
             <Text style={styles.freeDeliveryHint}>
               Add ₹{(FREE_DELIVERY_THRESHOLD - totalAmount).toFixed(0)} more for free delivery
             </Text>
           )}
-          <View style={[styles.priceRow, styles.totalRow]}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text>
-          </View>
-
+          <PriceRow label="Total" value={grandTotal} emphasis style={styles.totalRow} />
           <Button
             title="Proceed to Schedule"
+            fullWidth
             onPress={() => router.push("/(tabs)/basket/checkout")}
             style={{ marginTop: SPACING.md }}
           />
-        </View>
+        </BottomBar>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.lg,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
+    ...TYPE.h1,
     color: COLORS.black,
   },
   clearText: {
-    fontSize: 14,
+    ...TYPE.label,
     color: COLORS.error,
     fontWeight: "600",
   },
@@ -173,24 +162,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxxl,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    ...TYPE.h2,
     color: COLORS.text,
     marginTop: SPACING.lg,
   },
   emptySub: {
-    fontSize: 14,
+    ...TYPE.body,
     color: COLORS.textMuted,
     textAlign: "center",
     marginTop: SPACING.sm,
   },
+  listContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: 240,
+  },
   itemCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.md,
-    padding: SPACING.lg,
     marginBottom: SPACING.sm,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   itemTop: {
     flexDirection: "row",
@@ -200,6 +187,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   serviceBadge: {
+    ...TYPE.caption,
     fontSize: 10,
     fontWeight: "700",
     color: COLORS.gold,
@@ -208,12 +196,12 @@ const styles = StyleSheet.create({
     marginBottom: 2,
   },
   itemName: {
-    fontSize: 16,
+    ...TYPE.bodyLg,
     fontWeight: "600",
     color: COLORS.text,
   },
   itemPrice: {
-    fontSize: 12,
+    ...TYPE.caption,
     color: COLORS.textMuted,
     marginTop: 2,
   },
@@ -227,61 +215,19 @@ const styles = StyleSheet.create({
     marginTop: SPACING.md,
   },
   itemSubtotal: {
-    fontSize: 17,
-    fontWeight: "700",
+    ...TYPE.h3,
     color: COLORS.black,
   },
-  footer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: COLORS.white,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 10,
-  },
-  priceRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: SPACING.xs,
-  },
-  priceLabel: {
-    fontSize: 14,
-    color: COLORS.textLight,
-  },
-  priceValue: {
-    fontSize: 14,
-    fontWeight: "600",
-    color: COLORS.text,
-  },
   freeDeliveryHint: {
-    fontSize: 11,
+    ...TYPE.caption,
     color: COLORS.gold,
     fontWeight: "600",
-    marginBottom: SPACING.sm,
+    marginBottom: SPACING.xs,
   },
   totalRow: {
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
     paddingTop: SPACING.sm,
     marginTop: SPACING.xs,
-    marginBottom: 0,
-  },
-  totalLabel: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: COLORS.black,
-  },
-  totalValue: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: COLORS.forestGreen,
   },
 });
