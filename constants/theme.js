@@ -68,6 +68,61 @@ export const RADIUS = {
   full: 9999,
 };
 
+// Canonical icon sizes. Default UI glyph is `md` (24). Use one role per context;
+// never hardcode a raw pixel size for an icon in a screen.
+export const ICON = {
+  xs: 16, // inline / dense affordances
+  sm: 20, // list-item leading icons, chevrons
+  md: 24, // default toolbar / header / tab icons
+  lg: 28, // emphasised actions
+  xl: 32, // feature tiles
+  hero: 48, // empty-state illustrations
+};
+
+// Soft, brand-tinted elevation. We never use flat neutral-grey drop shadows.
+// Spread these into a style; each carries both iOS shadow* and Android elevation.
+export const SHADOWS = {
+  // Resting surfaces (cards, list items)
+  card: {
+    shadowColor: darkForest,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  // Lifted / highlighted surfaces
+  raised: {
+    shadowColor: darkForest,
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.1,
+    shadowRadius: 16,
+    elevation: 6,
+  },
+  // Pinned bottom bars — shadow casts upward
+  bar: {
+    shadowColor: darkForest,
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 12,
+  },
+};
+
+// ONE canonical type scale. Each role = { fontSize, lineHeight, fontWeight }.
+// Screens never invent a font size — they pick a role (usually via a primitive).
+export const TYPE = {
+  display: { fontSize: 28, lineHeight: 34, fontWeight: "800" },
+  h1: { fontSize: 24, lineHeight: 30, fontWeight: "800" },
+  h2: { fontSize: 20, lineHeight: 26, fontWeight: "700" },
+  h3: { fontSize: 17, lineHeight: 22, fontWeight: "700" },
+  bodyLg: { fontSize: 16, lineHeight: 24, fontWeight: "500" },
+  body: { fontSize: 15, lineHeight: 22, fontWeight: "500" },
+  bodySm: { fontSize: 13, lineHeight: 18, fontWeight: "500" },
+  label: { fontSize: 13, lineHeight: 16, fontWeight: "600" }, // chips, buttons, eyebrows
+  caption: { fontSize: 12, lineHeight: 16, fontWeight: "500" },
+  price: { fontSize: 16, lineHeight: 20, fontWeight: "700" },
+};
+
 // Delivery fee threshold
 export const FREE_DELIVERY_THRESHOLD = 299;
 export const DELIVERY_FEE = 40;
