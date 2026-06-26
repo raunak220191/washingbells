@@ -1,14 +1,16 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, TextInput, TouchableOpacity,
-  ScrollView, Alert, ActivityIndicator, Image, KeyboardAvoidingView, Platform,
+  ScrollView, Alert, Image, KeyboardAvoidingView, Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
 import { useAuthStore } from "../../../stores/authStore";
+import Screen from "../../../components/common/Screen";
+import Header from "../../../components/common/Header";
+import Button from "../../../components/common/Button";
 
 export default function EditProfileScreen() {
   const router = useRouter();
@@ -100,17 +102,10 @@ export default function EditProfileScreen() {
   const initials = name ? name.charAt(0).toUpperCase() : "U";
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false}>
       <KeyboardAvoidingView behavior={Platform.OS === "ios" ? "padding" : undefined} style={{ flex: 1 }}>
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-            <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Edit Profile</Text>
-          <TouchableOpacity onPress={handleSave} disabled={saving} style={styles.saveBtn}>
-            {saving ? <ActivityIndicator size="small" color={COLORS.gold} /> : <Text style={styles.saveBtnText}>Save</Text>}
-          </TouchableOpacity>
+        <View style={styles.headerPad}>
+          <Header title="Edit Profile" onBack={() => router.back()} />
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -166,30 +161,23 @@ export default function EditProfileScreen() {
             </View>
           </View>
 
-          {/* Save Button (bottom) */}
-          <TouchableOpacity style={[styles.saveButton, saving && { opacity: 0.6 }]} onPress={handleSave} disabled={saving}>
-            {saving ? (
-              <ActivityIndicator color={COLORS.white} />
-            ) : (
-              <Text style={styles.saveButtonText}>Save Changes</Text>
-            )}
-          </TouchableOpacity>
+          {/* Single primary save action */}
+          <Button
+            title="Save Changes"
+            variant="secondary"
+            fullWidth
+            loading={saving}
+            onPress={handleSave}
+            style={styles.saveButton}
+          />
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
-  },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
-  saveBtn: { paddingHorizontal: SPACING.md, paddingVertical: SPACING.sm },
-  saveBtnText: { fontSize: 15, fontWeight: "700", color: COLORS.gold },
+  headerPad: { paddingHorizontal: SPACING.lg },
   avatarSection: { alignItems: "center", paddingVertical: SPACING.xl },
   avatarImage: { width: 100, height: 100, borderRadius: 50, borderWidth: 3, borderColor: COLORS.gold },
   avatarPlaceholder: {
@@ -216,9 +204,7 @@ const styles = StyleSheet.create({
   disabledText: { fontSize: 16, color: COLORS.textMuted },
   hint: { fontSize: 11, color: COLORS.textMuted, marginTop: 4 },
   saveButton: {
-    backgroundColor: COLORS.forestGreen, marginHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg, borderRadius: RADIUS.full, alignItems: "center",
+    marginHorizontal: SPACING.xl,
     marginTop: SPACING.lg,
   },
-  saveButtonText: { color: COLORS.white, fontSize: 16, fontWeight: "700" },
 });

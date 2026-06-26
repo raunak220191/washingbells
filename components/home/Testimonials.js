@@ -56,7 +56,7 @@ const styles = StyleSheet.create({
   cardTop: { flexDirection: "row", alignItems: "center", marginBottom: SPACING.sm },
   avatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.mintGreen, justifyContent: "center", alignItems: "center" },
   avatarText: { fontWeight: "800", color: COLORS.forestGreen, fontSize: 16 },
-  name: { fontWeight: "700", color: COLORS.textDark, fontSize: 13 },
+  name: { fontWeight: "700", color: COLORS.black, fontSize: 13 },
   city: { fontSize: 11, color: COLORS.textMuted },
   stars: { flexDirection: "row" },
   text: { fontStyle: "italic", color: COLORS.textLight, fontSize: 13, lineHeight: 20 },
