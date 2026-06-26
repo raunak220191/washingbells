@@ -1,9 +1,10 @@
 import React from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS, TINTS } from "../../../constants/theme";
+import Screen from "../../../components/common/Screen";
+import Header from "../../../components/common/Header";
 
 const SUPPORT_PHONE = "+911234567890";
 const SUPPORT_WHATSAPP = "+911234567890";
@@ -32,13 +33,9 @@ export default function HelpScreen() {
   const emailSupport = () => Linking.openURL(`mailto:${SUPPORT_EMAIL}?subject=WashingBells Support`);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Help & Support</Text>
-        <View style={{ width: 40 }} />
+    <Screen padded={false}>
+      <View style={styles.headerPad}>
+        <Header title="Help & Support" onBack={() => router.back()} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -72,18 +69,15 @@ export default function HelpScreen() {
           ))}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
+  headerPad: { paddingHorizontal: SPACING.lg },
   contactRow: { flexDirection: "row", gap: SPACING.sm, paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
   contactCard: { flex: 1, borderRadius: RADIUS.lg, padding: SPACING.lg, alignItems: "center" },
-  contactLabel: { fontWeight: "700", fontSize: 13, color: COLORS.textDark, marginTop: SPACING.sm },
+  contactLabel: { fontWeight: "700", fontSize: 13, color: COLORS.black, marginTop: SPACING.sm },
   contactSub: { fontSize: 10, color: COLORS.textMuted, marginTop: 2 },
   section: { paddingHorizontal: SPACING.lg },
   sectionTitle: { fontSize: 16, fontWeight: "700", color: COLORS.black, marginBottom: SPACING.md },

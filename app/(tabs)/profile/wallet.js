@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS, TINTS } from "../../../constants/theme";
 import { useWalletStore } from "../../../stores/walletStore";
+import Screen from "../../../components/common/Screen";
+import Header from "../../../components/common/Header";
 
 export default function WalletScreen() {
   const router = useRouter();
@@ -31,13 +32,9 @@ export default function WalletScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>WB Wallet</Text>
-        <View style={{ width: 40 }} />
+    <Screen padded={false}>
+      <View style={styles.headerPad}>
+        <Header title="WB Wallet" onBack={() => router.back()} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
@@ -101,15 +98,12 @@ export default function WalletScreen() {
           )}
         </View>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
+  headerPad: { paddingHorizontal: SPACING.lg },
   balanceCard: { margin: SPACING.lg, backgroundColor: COLORS.forestGreen, borderRadius: RADIUS.xl, padding: SPACING.xl, alignItems: "center" },
   balanceLabel: { fontSize: 13, color: COLORS.mintGreen, fontWeight: "600" },
   balanceAmount: { fontSize: 36, fontWeight: "800", color: COLORS.white, marginVertical: 4 },
@@ -127,7 +121,7 @@ const styles = StyleSheet.create({
   emptyText: { color: COLORS.textMuted, marginTop: SPACING.sm },
   txnRow: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, padding: SPACING.md, borderRadius: RADIUS.md, marginBottom: SPACING.sm, borderWidth: 1, borderColor: COLORS.borderLight },
   txnIcon: { width: 36, height: 36, borderRadius: 18, justifyContent: "center", alignItems: "center" },
-  txnDesc: { fontSize: 13, fontWeight: "600", color: COLORS.textDark },
+  txnDesc: { fontSize: 13, fontWeight: "600", color: COLORS.black },
   txnDate: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
   txnAmount: { fontSize: 15, fontWeight: "700" },
 });
