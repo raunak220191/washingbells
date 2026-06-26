@@ -144,6 +144,23 @@ async function main() {
       log("auth_token re-minted via refresh:", newAccess);
       if (onHome(text) && newAccess) log("PASS: refresh-token cold start restored session");
       else { log("FAIL: refresh restore did not reach Home. Body:", JSON.stringify(text.slice(0, 200))); exitCode = 1; }
+    } else if (cmd === "tour") {
+      // Log in, then visit each bottom tab and screenshot. Flags Expo redboxes.
+      const [phone, password, outDir = "/tmp/wb-tour"] = rest;
+      if (!phone || !password) throw new Error("tour needs <phone> <password>");
+      await doLogin(page, phone, password);
+      // Session is in localStorage now; navigate by URL within the same context
+      // (expo-router strips the (tabs) group, so /basket, /orders, /profile).
+      const routes = ["home", "basket", "orders", "profile", "profile/wallet", "profile/edit"];
+      for (const route of routes) {
+        await page.goto(`${BASE}/${route}`, { waitUntil: "domcontentloaded", timeout: 90000 });
+        await page.waitForTimeout(4000);
+        const out = `${outDir}-${route.replace("/", "-")}.png`;
+        await shot(page, out);
+        const text = await page.innerText("body");
+        const redbox = /Uncaught Error|Console Error|Render Error|TypeError|undefined is not|is not a function/.test(text);
+        log(`route /${route}: ${redbox ? "‼ ERROR OVERLAY" : "ok"} :: ${JSON.stringify(text.slice(0, 110))}`);
+      }
     } else {
       throw new Error(`unknown command: ${cmd}`);
     }
