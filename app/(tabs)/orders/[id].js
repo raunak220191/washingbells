@@ -1,23 +1,45 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TYPE, TINTS } from "../../../constants/theme";
 import { useOrderStore } from "../../../stores/orderStore";
 import RescheduleModal from "../../../components/RescheduleModal";
+import Screen from "../../../components/common/Screen";
+import Header from "../../../components/common/Header";
+import StatusBadge from "../../../components/common/StatusBadge";
+import PriceRow from "../../../components/common/PriceRow";
+import BottomBar from "../../../components/common/BottomBar";
 import api from "../../../lib/api";
 import { printInvoice, shareInvoice } from "../../../lib/invoice";
 
 const LIFECYCLE = ["placed", "picked_up", "in_progress", "packed", "delivered"];
 const LIFECYCLE_LABELS = { placed: "Order Placed", picked_up: "Picked Up", in_progress: "In Progress", packed: "Packed & Ready", delivered: "Delivered" };
 
-function getStepState(currentStatus, stepStatus) {
-  if (currentStatus === "cancelled") return "cancelled";
-  const ci = LIFECYCLE.indexOf(currentStatus);
-  const si = LIFECYCLE.indexOf(stepStatus);
-  if (si < ci) return "done";
-  if (si === ci) return "active";
+// Map EVERY backend status onto the 5-step customer lifecycle so the tracker
+// always highlights where the order actually is. Without this, statuses that
+// aren't lifecycle keys (confirmed / at_store / processing / ready_for_delivery
+// / out_for_delivery) fell through and every step rendered as "future".
+const STATUS_TO_STEP = {
+  placed: 0,
+  pending_payment: 0,
+  confirmed: 0,
+  rider_assigned_pickup: 1,
+  picked_up: 1,
+  at_store: 2,
+  processing: 2,
+  in_progress: 2,
+  ready_for_delivery: 3,
+  packed: 3,
+  out_for_delivery: 3,
+  delivered: 4,
+};
+
+function getStepState(currentStatus, stepIndex) {
+  if (currentStatus === "cancelled" || currentStatus === "rejected") return "cancelled";
+  const ci = STATUS_TO_STEP[currentStatus] ?? 0;
+  if (stepIndex < ci) return "done";
+  if (stepIndex === ci) return "active";
   return "future";
 }
 
@@ -76,13 +98,9 @@ export default function OrderDetailScreen() {
   const canReschedule = ["placed", "pending_payment", "confirmed", "rider_assigned_pickup"].includes(order.status);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Order Details</Text>
-        <View style={{ width: 40 }} />
+    <Screen padded={false}>
+      <View style={styles.headerPad}>
+        <Header title="Order Details" onBack={() => router.back()} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
@@ -93,9 +111,7 @@ export default function OrderDetailScreen() {
               <Text style={styles.orderNumber}>{order.order_number}</Text>
               <Text style={styles.orderDate}>{new Date(order.created_at).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })}</Text>
             </View>
-            <View style={[styles.statusBadge, { backgroundColor: ORDER_STATUS_COLORS[order.status] || COLORS.gold }]}>
-              <Text style={styles.statusText}>{(ORDER_STATUS_LABELS[order.status] || order.status.replace(/_/g, " ")).toUpperCase()}</Text>
-            </View>
+            <StatusBadge status={order.status} />
           </View>
           <Text style={styles.totalAmount}>₹{order.total_amount.toFixed(2)}</Text>
           {order.payment_method === "cod" && <Text style={styles.codLabel}>💵 Cash on Delivery</Text>}
@@ -105,8 +121,8 @@ export default function OrderDetailScreen() {
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Lifecycle</Text>
           {LIFECYCLE.map((step, i) => {
-            const state = getStepState(order.status, step);
-            const tlEntry = order.status_timeline?.find(t => t.status === step);
+            const state = getStepState(order.status, i);
+            const tlEntry = order.status_timeline?.find(t => (STATUS_TO_STEP[t.status] ?? -1) === i);
             return (
               <View key={step} style={styles.timelineRow}>
                 <View style={styles.timelineLeft}>
@@ -172,13 +188,15 @@ export default function OrderDetailScreen() {
         {/* Billing */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Billing</Text>
-          <View style={styles.billRow}><Text style={styles.billLabel}>Subtotal</Text><Text style={styles.billVal}>₹{order.subtotal.toFixed(2)}</Text></View>
-          <View style={styles.billRow}><Text style={styles.billLabel}>Delivery</Text><Text style={[styles.billVal, order.delivery_fee === 0 && { color: COLORS.success }]}>{order.delivery_fee === 0 ? "FREE" : `₹${order.delivery_fee}`}</Text></View>
-          {order.discount > 0 && <View style={styles.billRow}><Text style={styles.billLabel}>Discount</Text><Text style={[styles.billVal, { color: COLORS.success }]}>-₹{order.discount.toFixed(2)}</Text></View>}
-          {(order.wallet_applied || 0) > 0 && <View style={styles.billRow}><Text style={styles.billLabel}>Wallet</Text><Text style={[styles.billVal, { color: COLORS.success }]}>-₹{order.wallet_applied.toFixed(2)}</Text></View>}
-          <View style={[styles.billRow, { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: SPACING.sm, marginTop: SPACING.xs }]}>
-            <Text style={styles.billTotal}>Total</Text><Text style={styles.billTotalVal}>₹{order.total_amount.toFixed(2)}</Text>
-          </View>
+          <PriceRow label="Subtotal" value={order.subtotal} />
+          <PriceRow label="Delivery" value={order.delivery_fee} free={order.delivery_fee === 0} />
+          {order.discount > 0 && (
+            <PriceRow label="Discount" value={`-₹${order.discount.toFixed(2)}`} positive />
+          )}
+          {(order.wallet_applied || 0) > 0 && (
+            <PriceRow label="Wallet" value={`-₹${order.wallet_applied.toFixed(2)}`} positive />
+          )}
+          <PriceRow label="Total" value={order.total_amount} emphasis style={styles.billTotalRow} />
           <TouchableOpacity style={styles.billBtn} onPress={handleDownloadBill} disabled={billLoading}>
             {billLoading ? <ActivityIndicator color={COLORS.forestGreen} /> : (
               <><Ionicons name="document-text-outline" size={17} color={COLORS.forestGreen} /><Text style={styles.billBtnText}>Download Bill / GST Invoice</Text></>
@@ -218,7 +236,7 @@ export default function OrderDetailScreen() {
       </ScrollView>
 
       {/* Bottom Actions */}
-      <View style={styles.bottomBar}>
+      <BottomBar style={styles.bottomBarRow}>
         {isCODPending && (
           <TouchableOpacity style={styles.payNowBtn} onPress={handlePayNow} disabled={payLoading}>
             {payLoading ? <ActivityIndicator color={COLORS.white} /> : <><Ionicons name="card" size={18} color={COLORS.white} /><Text style={styles.payNowText}>Pay Now ₹{order.total_amount.toFixed(0)}</Text></>}
@@ -235,7 +253,7 @@ export default function OrderDetailScreen() {
             <Text style={styles.cancelText}>Cancel Order</Text>
           </TouchableOpacity>
         )}
-      </View>
+      </BottomBar>
 
       <RescheduleModal
         visible={showReschedule}
@@ -244,23 +262,18 @@ export default function OrderDetailScreen() {
         onClose={() => setShowReschedule(false)}
         onDone={() => { setShowReschedule(false); fetchOrder(id); Alert.alert("Rescheduled", "Your pickup time has been updated."); }}
       />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  center: { flex: 1, justifyContent: "center", alignItems: "center" },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
+  center: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: COLORS.background },
+  headerPad: { paddingHorizontal: SPACING.lg },
   section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
   sectionTitle: { fontSize: 15, fontWeight: "700", color: COLORS.black, marginBottom: SPACING.md },
   orderInfoRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "flex-start" },
   orderNumber: { fontSize: 18, fontWeight: "800", color: COLORS.forestGreen },
   orderDate: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
-  statusBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
-  statusText: { color: COLORS.white, fontSize: 11, fontWeight: "700" },
   totalAmount: { fontSize: 22, fontWeight: "800", color: COLORS.black, marginTop: SPACING.sm },
   codLabel: { fontSize: 13, color: COLORS.gold, fontWeight: "600", marginTop: 4 },
   // Timeline
@@ -274,15 +287,15 @@ const styles = StyleSheet.create({
   timelineLine: { width: 2, flex: 1, backgroundColor: COLORS.border, marginVertical: 2 },
   lineDone: { backgroundColor: COLORS.success },
   timelineContent: { flex: 1, marginLeft: SPACING.md, paddingBottom: SPACING.md },
-  timelineLabel: { fontSize: 14, fontWeight: "600", color: COLORS.textDark },
+  timelineLabel: { fontSize: 14, fontWeight: "600", color: COLORS.black },
   timelineTime: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
-  cancelledBanner: { flexDirection: "row", alignItems: "center", backgroundColor: "#FFF0F0", padding: SPACING.md, borderRadius: RADIUS.md, marginTop: SPACING.sm },
+  cancelledBanner: { flexDirection: "row", alignItems: "center", backgroundColor: TINTS.errorBg, padding: SPACING.md, borderRadius: RADIUS.md, marginTop: SPACING.sm },
   cancelledText: { color: COLORS.error, fontWeight: "700", marginLeft: SPACING.sm },
   // Agent
   agentCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, padding: SPACING.lg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
   agentAvatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.mintGreen, justifyContent: "center", alignItems: "center" },
   agentInitial: { fontWeight: "800", fontSize: 18, color: COLORS.forestGreen },
-  agentName: { fontWeight: "700", fontSize: 14, color: COLORS.textDark },
+  agentName: { fontWeight: "700", fontSize: 14, color: COLORS.black },
   agentPhone: { fontSize: 12, color: COLORS.textMuted },
   // Items
   itemRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: SPACING.xs },
@@ -294,21 +307,17 @@ const styles = StyleSheet.create({
   tagChip: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.mintGreen, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 8 },
   tagCode: { fontSize: 11, fontWeight: "600", color: COLORS.forestGreen, marginLeft: 4 },
   // Billing
-  billRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: 4 },
-  billLabel: { fontSize: 13, color: COLORS.textLight },
-  billVal: { fontSize: 13, fontWeight: "600", color: COLORS.text },
-  billTotal: { fontSize: 16, fontWeight: "700", color: COLORS.black },
-  billTotalVal: { fontSize: 16, fontWeight: "700", color: COLORS.forestGreen },
+  billTotalRow: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: SPACING.sm, marginTop: SPACING.xs },
   billBtn: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, marginTop: SPACING.md, paddingVertical: 11, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.forestGreen },
   billBtnText: { color: COLORS.forestGreen, fontSize: 13, fontWeight: "700" },
   // Schedule
   scheduleRow: { flexDirection: "row", gap: SPACING.md },
   scheduleBlock: { flex: 1, backgroundColor: COLORS.white, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
-  scheduleLabel: { fontSize: 12, fontWeight: "700", color: COLORS.textDark, marginTop: 4 },
+  scheduleLabel: { fontSize: 12, fontWeight: "700", color: COLORS.black, marginTop: 4 },
   scheduleVal: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
   instructions: { fontSize: 13, color: COLORS.textLight, lineHeight: 20, backgroundColor: COLORS.white, padding: SPACING.md, borderRadius: RADIUS.md },
   // Bottom
-  bottomBar: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "center", gap: SPACING.md, backgroundColor: COLORS.white, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg, borderTopWidth: 1, borderTopColor: COLORS.border },
+  bottomBarRow: { flexDirection: "row", justifyContent: "center", gap: SPACING.md },
   payNowBtn: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.forestGreen, paddingHorizontal: 24, paddingVertical: 14, borderRadius: RADIUS.full },
   payNowText: { color: COLORS.white, fontWeight: "700", fontSize: 15, marginLeft: 8 },
   cancelBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.error },
