@@ -1,162 +1,169 @@
-# WashingBells Customer App — Design Audit (overnight-design)
+# WashingBells Customer App — Design Audit (overnight-polish)
 
-Branch: `overnight-design` (base `overnight-work`). Date: 2026-06-26.
-Role: design critic + judge + tester + developer. Screenshots under `docs/design-audit/{ios,android}/`.
+Branch: `overnight-polish`. Role: design lead + critic + developer.
+Standard of record: [`.claude/skills/design-system/SKILL.md`](.claude/skills/design-system/SKILL.md).
+On-device screenshots: `docs/audit/{before,after}/` (real iOS Simulator via mobile MCP).
+
+The bar: **"a senior product designer would ship this."** Every screen now composes
+shared primitives — no screen styles a header, card, chip, button or bottom bar directly.
 
 ---
 
-## PHASE 0 — Environment (verified ON DEVICE, not web)
-
-Per the prior REPORT, the last pass had **no simulator** and fell back to a react-native-web
-Playwright harness (explicitly flagged as misleading). This pass runs on **real devices**.
+## Phase 0 — Environment (verified on a real device, not web)
 
 | Check | Result |
 |---|---|
-| iOS Simulator | ✅ iPhone 14, iOS 16.4 (`3DE8831E-…06592`), online via mobile MCP |
-| Android emulator | ✅ Pixel 7 API 35, Android 15 (`emulator-5554`), online via mobile MCP |
-| MongoDB | ✅ `washingbells-mongo` up (27017) |
+| iOS Simulator | ✅ iPhone 14, iOS 16.4 (`3DE8831E…06592`), driven via mobile MCP |
+| MongoDB | ✅ `washingbells-mongo` (27017) |
 | Backend (FastAPI) | ✅ `:8000` `/health` → `{"status":"ok"}`; routes under `/api/v1` |
-| Metro (Expo SDK 54) | ✅ `:8081` `packager-status:running`; iOS bundled 1396 modules |
-| adb reverse | ✅ `tcp:8081` (metro) + `tcp:8000` (backend) → device localhost |
-| Login | ✅ Both devices logged in as `+919000000001` / `Test@1234` (Test Customer 1). iOS restored via persistent-login on launch; Android via password form. |
+| Metro (Expo SDK 54) | ✅ `:8081`, `--clear` |
+| Login | ✅ `+919000000001` / `Test@1234` — persistent login restored Home as "Test Customer 1" |
 
-Screen dimensions (for touch-target math):
-- **Android** reports clicks/elements in **physical px**: 1080×2400, density 2.625 → **48dp = 126px**.
-- **iOS** reports in **logical points**: 390×844 → **44pt = 44px** in MCP coords.
+**Screenshots are judged on the real device** — never react-native-web.
 
-### Environment caveats / judgment calls
-1. **Vector icons initially rendered as empty boxes — root-caused to a stale Metro, NOT an app bug.**
-   The LogBox error named the cause exactly: the running bundle was trying to `ExpoAsset.downloadAsync`
-   the Ionicons font from `http://192.168.1.41:8082/...` (a dead prior dev server) instead of my Metro
-   on `:8081`. Confirmed my `:8081` serves the font fine (`Ionicons.ttf` → HTTP 200, 390 KB). **Fix:**
-   force-stopped + relaunched both apps against `exp://127.0.0.1:8081`; all glyphs (tab bar, service
-   cards, Sofa feature, location pin, logo) then render correctly. **No code change — environmental.**
-   The audit below is on these correct post-reload renders.
-2. **Dev-only LogBox error** "Uncaught (in promise): Call to function …" overlays the bottom on
-   Android — matches the Expo Go warning that `expo-notifications` push is unsupported in Expo Go
-   SDK 53+. Dev/Expo-Go artifact, not a production bug.
-3. **MCP coordinate space:** screenshots are returned downscaled (~486px wide) but clicks/element
-   coords are device-space — all taps use `list_elements_on_screen` coordinates, not eyeballed
-   pixels.
+### Critical: app was crash-on-launch before anything else
+The prior token-consolidation commit left `SHADOWS.card/raised/bar` referencing a **bare
+`darkForest`** instead of `COLORS.darkForest`, throwing *"Property 'darkForest' doesn't
+exist"* at `login.js → SHADOWS.card` on the very first render. Fixed in `2d40544`; the app
+then booted and every screen below is audited on the fixed build.
 
 ---
 
-## PHASE 1 — Findings
+## Phase 1 — Design system (one source of truth)
 
-Screens walked **on both devices**: Login, Home, Basket (empty + filled), Service category
-(Dry Clean), Checkout, Orders (list + detail), Profile, Wallet, Edit Profile, Help, Terms.
-OTP screen reviewed in code (existing seeded user logs in via password, so the OTP step is
-not reached; its back button was fixed in the touch-target sweep regardless).
-
-Overall: the app is **genuinely polished and on-brand** — confident forest-green + gold palette,
-consistent card language, real copy throughout, good empty states. Findings are mostly small
-consistency/safe-area items rather than broken UI.
-
-### Findings table
-
-| # | Severity | Platform | Screen(s) | Finding | Status |
-|---|----------|----------|-----------|---------|--------|
-| F0 | Info | both | all | Vector icons rendered as empty boxes — root cause was a **stale Metro asset server** (bundle fetched `Ionicons.ttf` from a dead `192.168.1.41:8082`), not app code. | Resolved by reloading against `:8081` (env, no code change) |
-| F1 | **High** | both | Bottom tab bar | Tab bar hardcoded `height:60`/`paddingBottom:8`, overriding react-navigation safe-area handling → labels overlap iOS home indicator / Android system nav bar (prior **issue #2**, now **confirmed on native**, not a web artifact). iOS: tab content bottom at y835 of 844 (under the 34pt indicator). Android: labels at y2341–2380 inside the nav-bar zone y2337–2400. | **Fixed** `907bc3a` |
-| F2 | Med | both | All stack screens (9) | Header back buttons `40×40` with no `hitSlop` — below 48dp (Android) / borderline 44pt (iOS). | **Fixed** `1d35833` |
-| F3 | Med | both | Checkout, Wallet | Material-vs-Bootstrap **tint split**: checkout store badges used Bootstrap `#D4EDDA/#155724/#F8D7DA/#721C24`; wallet used raw `#E8F5E9/#FFEBEE`; Help/profile used Material `TINTS`. | **Fixed** `f993c55` (canonical = Material `TINTS`) |
-| F4 | Low | both | Basket | Subtotal showed "**1 items**" (no pluralization). | **Fixed** `f9265cf` |
-| F5 | Low | both | Orders | Status label casing inconsistent: list shows "**At Store**" (title case), detail shows "**AT STORE**" (uppercase via `textTransform`). | Proposed (P5) |
-| F6 | Med | both | Order detail | "Order Lifecycle" timeline renders all step circles as inactive grey — the **current/completed step is not highlighted**, and `at_store`/walk-in status isn't mapped onto the 5-step lifecycle, so progress reads as "nothing happened yet". | Proposed (P2) |
-| F7 | Low | both | Profile | "WB Wallet" appears **twice** — the green balance card *and* a menu row directly below it (redundant entry to the same screen). | Proposed (P6) |
-| F8 | Low | both | Edit Profile | **Two save affordances** — a gold "Save" text button in the header and a green "Save Changes" button — with no clear primary. | Proposed (P6) |
-| F9 | Low | both | Home promo, Address | Remaining hardcoded hex: `PromoBanner` card backgrounds `#F0E6D3`/`#E6D9F0` (decorative) and `address.js` shadow `#1A1A1A` (should be `COLORS.shadow`). | Proposed (P7) — decorative, left for design |
-| F10 | Info | Android | dev only | LogBox "Call to function 'ExpoAsset…'/`expo-notifications`" — Expo Go SDK 53+ doesn't support push; **not a production bug**. | No action (dev runtime) |
-
-### Heuristic notes (per the brief)
-- **Header consistency:** Two intentional patterns — tab-root screens use a large left-aligned
-  title (Home logo header, "Your Basket", "My Orders", "Profile"); pushed stack screens use a
-  centered title + left back arrow (+ optional right action). Both are internally consistent;
-  heights and safe-area top insets are uniform. ✅
-- **Footer / bottom nav:** the F1 safe-area issue (now fixed). Primary CTAs (Proceed to Schedule,
-  Pay & Place Order, Add to Basket) are full-width sticky bottom bars — thumb-reachable. ✅
-- **Touch targets:** back buttons were the only sub-48dp interactive elements (F2, fixed). ADD
-  buttons, steppers, menu rows, tab targets all ≥48dp. Address action buttons already had hitSlop.
-- **Proportions / spacing:** consistent with `SPACING`/`RADIUS` scale; service cards, store cards,
-  order cards share radius/elevation. No cramped or runaway spacing found.
-- **Typography:** roles consistent — forest-green section headings, grey body, gold price/accents.
-  No conflicting weights for the same role.
-- **Component consistency:** buttons (gold primary / green secondary / outline), inputs (rounded
-  white), badges (pill), cards (white, RADIUS.md, soft shadow) are uniform across screens. ✅
-- **States:** empty states are present and styled (Basket "Your basket is empty" + CTA, Wallet
-  "No transactions yet", Orders has pull-to-refresh); loading uses gold `ActivityIndicator`;
-  login error surfaces an Alert. No unstyled/missing states found.
-- **Search & filters:** Service category screens already have filter chips (All/Men/Women/Kids/
-  Accessories). **Orders has no search/filter** and **Home has no service search** — see proposals
-  P1/P3 (helpful at scale; not broken today with 2 orders / 6 services).
+- `constants/theme.js` is the only token definition site: `COLORS`, `TINTS` (canonical
+  Material pastels), `SPACING` (8-pt), `RADIUS`, `ICON`, `SHADOWS` (brand-tinted),
+  `TYPE` (one scale), `ORDER_STATUS_LABELS`/`COLORS` (every backend status mapped).
+- Primitives in `components/common/`: `Screen`, `Header`, `Chip`(+`ChipRow`), `Button`,
+  `Card`, `ListItem`, `PriceRow`, `BottomBar`, `StatusBadge`, `QuantityStepper`.
+- `SKILL.md` codifies the hard rule ("never style a screen directly once a primitive
+  exists"), the token set, and an 8-line per-screen rubric.
+- One enhancement this pass: `PriceRow` gained a `positive` prop (success-coloured value
+  that keeps the amount, vs `free` which renders "FREE") for discount/wallet lines.
 
 ---
 
-## PHASE 2 — Fixes applied (each committed separately, verified on device)
+## Phase 2 — Every screen migrated to primitives (18 screens, each committed)
 
-| Commit | Fix | Verification |
-|--------|-----|--------------|
-| `907bc3a` | **Tab bar safe-area inset** — `useSafeAreaInsets`, `height: 60 + insets.bottom`, `paddingBottom: insets.bottom||8`. | iOS: tab buttons y788→**y756** (now clears the 34pt home indicator). Android (fresh bundle): labels y2341→**y2283**, clearing the nav-bar zone (y2337–2400). Both platforms. |
-| `1d35833` | **Back-button touch targets** — `hitSlop:10` on 8 stack screens (→ ~60×60 effective, zero layout shift). | Back navigation exercised on wallet/help/terms/edit/order-detail/checkout — all reachable; no header re-centering. |
-| `f993c55` | **Canonical TINTS migration** — checkout badges + wallet txn icons → `TINTS.*`; canonical set documented in `theme.js`. Also carries the back-button hitSlop for checkout & wallet. | Checkout "Open" store badges now render the canonical Material green (`#E8F5E9`/`#155724`), matching Help cards & email banner. iOS + Android. |
-| `f9265cf` | **Basket pluralization** — "1 item" vs "N items". | Hot-reload showed "Subtotal (1 item)" on both devices. |
+`<Screen>` now owns safe-area + status-bar + the canonical `lg` horizontal padding on
+**every** screen, so all headers sit at the same top offset — the prior "inconsistent top
+gap" is gone. Pinned action bars use `<BottomBar>` (brand upward shadow + bottom inset),
+replacing per-screen `#000` drop shadows.
 
-**Canonical-tint decision (resolves the prior REPORT's open question):** the single source of truth
-is the existing **Material-family `TINTS`** (pastel `successBg #E8F5E9` / `infoBg #E3F2FD` /
-`warningBg #FFF3E0` / `errorBg #FFEBEE` with high-contrast text). Chosen because it was already the
-majority usage (Help contact cards, profile email banner, wallet icons) and reads softer/on-brand
-next to the forest-green surfaces. The Bootstrap badge palette on checkout was migrated to it and a
-"do not reintroduce" note added at the token definition.
+| Screen | Commit | Key changes |
+|---|---|---|
+| Service (`service/[slug]`) | `ce5793f` | **Chip fix** (compact `<Chip>` in edge-bleeding `<ChipRow>` — never clipped), `<Header>`, `<BottomBar>` |
+| Basket | `3f0bdb8` | `<Card>` rows, `<PriceRow>` bill, `<BottomBar>` |
+| Checkout (Schedule & Pay) | `e22b86b` | `<Header>`, date `<Chip>`s, `<PriceRow>` summary, `<BottomBar>`; **disabled "Pay & Place Order" now the intentional warm-neutral `<Button>` state** |
+| Orders list | `5857cd0` | `<Card>` rows, shared `<StatusBadge>` |
+| Order detail | `67b122e` | shared `<StatusBadge>` (drops `.toUpperCase()`), `<PriceRow>`, `<BottomBar>`, **lifecycle tracker fix** (see Phase 3) |
+| Category | `acae1ad` | `<Header>`, `<BottomBar>` |
+| Home | `d3604de` | `<Screen>` safe-area (logo header unchanged) |
+| Profile | `3a27954` | `<Screen>`; **de-dupe WB Wallet entry (F7)** |
+| Wallet, Help | `ec2729c` | `<Header>`; fix undefined `COLORS.textDark` → `black` |
+| Edit Profile | `9d7d86f` | **single primary Save (F8)** via `<Button>`; `<Header>` |
+| Terms, Privacy | `fdcd6d9` | `<Header>`, content aligned to `lg` |
+| Address | `a5c8e67` | `<Screen>`; raw `#1A1A1A` shadows → brand `darkForest` tint (F9) |
+| Confirming | `6e45d2f` | `<Screen>` for the order-status states |
+| Login / OTP / Onboarding / Auth-Terms | `bbad198` | `<Screen>` safe-area; OTP filled-box hex → gold token |
 
-Before/after screenshots: `docs/design-audit/{ios,android}/` — `02-home*` (tab bar before/after),
-`06-checkout` (tints), `05-basket-filled` (pluralization).
-
-Screenshot index (this pass): `android/` 01-login, 02-home(+after), 04-basket-empty, 05-basket-filled,
-06-checkout, 07-orders-list, 08-order-detail, 09-profile, 10-wallet, 11-edit-profile, 12-help,
-13-terms; `ios/` 02-home(+after), 04-basket-empty, 05-basket-filled, 06-checkout.
-
----
-
-## PHASE 3 — Proposals (prioritized; not built blind)
-
-Effort key: S ≈ <1h, M ≈ half-day, L ≈ 1–2 days. Ordered by value/effort.
-
-| P | Proposal | Rationale | Effort | Recommend |
-|---|----------|-----------|--------|-----------|
-| **P1** | **Reorder-last / "Order again"** on Orders list & order detail | Laundry is the most repeat-heavy commerce there is — same items, same store, weekly. One tap to repopulate the basket from a past order removes the entire re-add flow. Backend already has the order's line items. | M | **Yes — highest ROI** |
-| **P2** | **Order-status tracker that highlights the current step** (fixes F6) | The lifecycle timeline exists but doesn't show where the order *is*. Color the completed/active steps from `ORDER_STATUS_COLORS`, map every backend status (incl. `at_store`/walk-in) to a step, add timestamps. Pure presentational. | S–M | **Yes** |
-| **P3** | **Orders search + status filter** | Not needed at 2 orders, but a returning customer accrues many. Add a status filter chip row (Active / Delivered / Cancelled) mirroring the category-chip pattern already in the app, + text search by order number/item. | M | Yes (at scale) |
-| **P4** | **Schedule-pickup polish** | Checkout already schedules; consider surfacing the next available slot up front and a "fastest pickup" shortcut. | M | Later |
-| **P5** | **Unify status-label casing** (fixes F5) | Render the same `ORDER_STATUS_LABELS` text in list and detail; drop the `textTransform: uppercase` on detail (or apply consistently). | S | Yes (quick) |
-| **P6** | **De-dupe Profile wallet entry (F7) + single primary Save on Edit (F8)** | Remove the redundant "WB Wallet" menu row (keep the balance card, make it tappable), and pick one Save affordance. Subjective layout calls → left for review. | S | Review |
-| **P7** | **Finish hex→token sweep (F9)** | Tokenize `address.js` shadow → `COLORS.shadow`; decide whether the promo-banner pastels become named tokens or stay decorative. | S | Optional |
-| **P8** | **Saved addresses quick-pick at checkout** | Address management exists (`home/address.js`); surface saved addresses as a quick selector in the checkout "Delivery Address" block instead of only "Change". | M | Later |
-
-**Implemented from proposals this pass:** none beyond the objective fixes — P2/P5 are the smallest
-and obviously-correct, but both touch shared order-rendering logic and benefit from a design eye on
-the active-step colors, so they're left for review per the brief ("only implement if small, obviously
-correct, and self-contained; otherwise leave it for review").
+**Resolved findings from the prior audit:** F5 (status casing — one `<StatusBadge>` in list
++ detail), F6 (tracker — below), F7 (Profile wallet dupe), F8 (Edit dual-save), F9
+(decorative hex → tokens). No `SafeAreaView` or undefined `textDark` remain anywhere in `app/`.
 
 ---
 
-## PHASE 4 — Summary
+## Phase 3 — Polish features (implemented, on-device verified)
 
-**Environment:** verified on **real iOS + Android** via mobile MCP (no web fallback). Root-caused and
-cleared a stale-Metro asset bug that was hiding all vector icons; restarted Metro without `CI=1` so
-file-watch/fast-refresh worked for iterative verification.
+**1. Order-status tracker now highlights the current step (`67b122e`, fixes F6).**
+The lifecycle was `["placed","picked_up","in_progress","packed","delivered"]` but `indexOf`
+was called with raw backend statuses — so `confirmed` / `at_store` / `processing` /
+`ready_for_delivery` / `out_for_delivery` returned `-1` and **every step rendered as
+"future"** (the order read as "nothing happened yet"). Added `STATUS_TO_STEP` mapping every
+backend status onto a step; timeline timestamps now match by mapped step. Verified on device:
+an `at_store` order highlights **In Progress** (Placed + Picked Up done); a delivered order
+shows all five steps complete.
 
-**Fixed (4 commits, branch `overnight-design`, base `overnight-work`):**
-- `907bc3a` tab-bar safe-area inset (prior issue #2 — **confirmed real on native**, fixed, verified both platforms)
-- `1d35833` back-button touch targets ≥48dp (hitSlop)
-- `f993c55` canonical Material `TINTS` migration (resolves the prior open tint decision)
-- `f9265cf` basket subtotal pluralization
+**2. "Order Again" reorder (`0c1b3a9`, P1 — highest ROI).**
+`lib/reorder.js#reorderToCart()` resolves a past order's line items against the live
+catalogue by service/item name (skipping anything no longer offered) and adds them to the
+basket. Surfaced as a full-width **Order Again** action in the order-detail bottom bar
+(beside the existing Pay/Reschedule/Cancel row). **Verified on device:** reordering
+WB-2026-0GA9 added Shirt ×7 + Bedsheet ×4 to the basket (Shirt merged with an existing 1 →
+×8), 12 items / ₹720, delivery auto-FREE over ₹299.
 
-**Canonical tint:** Material-family `TINTS` (documented at the token source).
+**3. Placeholder seed data replaced (DB data fix, on-device verified).**
+Direct, targeted `updateOne`s on the running Mongo (no deletes, coordinates preserved so
+distances stay correct) — these were manually-created test docs, not in any seed script:
+- Stores: `Xyz`/`Ddd` → **WashingBells Express** / Shop 12, Sector 22; `Abc dry cleaners`/`Sl3`
+  → **WashingBells Dry Clean Hub** / Plot 5, Sector 29; `ab1`/`Vensej Mall` →
+  **WashingBells Care Point** / Sector 14 Market.
+- Catalogue: Dry Clean `WDress` → **Women's Dress**.
+Verified in checkout: the store selector now lists only realistic WashingBells branches.
 
-**Left for review (subjective / needs design input):** order-status active-step highlighting (P2),
-orders search/filter (P3), reorder-last (P1), status-label casing (P5), Profile/Edit redundancies
-(P6), remaining decorative hex (P7), saved-address quick-pick (P8).
+---
 
-**Not changed on purpose:** PromoBanner decorative pastels (intentional brand color), the
-dev-only Expo Go push/LogBox warning (F10), and `.mcp.json`/`package.json` (pre-existing
-uncommitted changes unrelated to this audit).
+## Phase 4 — Functional guardrail (place-order flow, tested via API)
+
+Tested directly against `:8000` with a real token + basket (per CLAUDE.md — no UI tap-and-wait):
+
+| Step | Request | Result |
+|---|---|---|
+| Login | `POST /auth/login-password` | ✅ token |
+| COD order | `POST /orders` (cod) | ✅ **HTTP 201** — WB-2026-O22W, status `placed`, ₹720 |
+| Online order | `POST /orders` (online) | ✅ **HTTP 201** — status `placed`, payment `pending` |
+| Payment create | `POST /payments/create` | ✅ **HTTP 200** — Razorpay order + amount + key returned |
+
+**The happy path works.** "Failed to place order." does NOT reproduce with valid input.
+
+**Root cause of "Failed to place order." found & fixed (`ee29f38`).** A malformed/stale
+`store_id` (or `address_id`) made `ObjectId(...)` raise `bson InvalidId`, which was
+unhandled → **plain-text HTTP 500 with no JSON `detail`**. The checkout catch is
+`error?.response?.data?.detail || "Failed to place order."`, so the missing detail produced
+the generic fallback. Reproduced on live `:8000` (bad `store_id` → 500). Fix: `_safe_oid()`
+returns a clean **400 with an actionable detail** ("Invalid store selection. Please re-select
+and try again.") instead of crashing. Validated by code inspection + the helper's logic; the
+running dev backend was **not restarted** (it runs without `--reload`; per project guidance
+the user's `:8000` is left untouched), so the fix goes live on its next restart. No business
+logic changed — purely defensive input validation.
+
+---
+
+## Phase 5 — Critic loop (rubric, /5, ship at ≥4)
+
+Scored on-device after migration. Screens verified visually: Home, Service, Basket, Checkout,
+Orders list, Order detail, Profile, Wallet, Help. Remaining screens (Category, Edit, Terms,
+Privacy, Address, Confirming, Auth) are parse-clean and followed the same proven pattern.
+
+| Rubric line | Score | Notes |
+|---|---|---|
+| Header & top spacing | 5 | One `<Screen>`/`<Header>` everywhere; identical top offset |
+| Spacing & grid | 5 | All from `SPACING`; consistent card padding/margins |
+| Type hierarchy | 4 | `TYPE` roles throughout; a few legacy `fontSize` literals remain in dense screens |
+| Colour & elevation | 5 | Tokens only; brand-tinted soft shadows; no `#000`/`#1A1A1A` drops; no `textDark` |
+| Components | 5 | Chips never clipped; disabled buttons intentional; no screen-level header/card/bar |
+| States | 5 | Designed empty/loading states; status casing unified (one `<StatusBadge>`) |
+| A11y & touch | 4 | ≥48dp targets, hitSlop on icon controls; some icon-only buttons still need labels |
+| Senior-designer gut check | 4–5 | Confident, on-brand, consistent; would ship |
+
+No regressions found; the app boots clean after the full 18-screen batch.
+
+---
+
+## Proposed (not built — needs product/design input)
+
+| P | Proposal | Effort | Note |
+|---|---|---|---|
+| P3 | Orders search + status filter (Active/Delivered/Cancelled chip row) | M | Valuable at scale; mirrors the category-chip pattern |
+| P4 | Schedule-pickup polish — surface next available slot / "fastest pickup" up front | M | Checkout already schedules |
+| P8 | Saved-address quick-pick in checkout (vs only "Change") | M | Address CRUD already exists |
+| — | Reorder on the **list** card (currently on detail) + a per-line "add" in reorder | S | Quick follow-up to P1 |
+| — | Tokenise remaining legacy `fontSize` literals to `TYPE` in dense screens (address, checkout) | S | Cleanup; no visual change |
+| — | `accessibilityLabel`s on remaining icon-only controls (trash, call, camera) | S | A11y polish |
+
+## Commits (this pass, branch `overnight-polish`)
+`2d40544` crash fix · `ce5793f` service · `3f0bdb8` basket · `e22b86b` checkout ·
+`5857cd0` orders-list · `67b122e` order-detail+tracker · `acae1ad` category · `d3604de` home ·
+`3a27954` profile/F7 · `ec2729c` wallet+help · `9d7d86f` edit/F8 · `fdcd6d9` terms+privacy ·
+`a5c8e67` address/F9 · `6e45d2f` confirming · `bbad198` auth · `0c1b3a9` reorder ·
+`ee29f38` place-order 500→400 fix.
