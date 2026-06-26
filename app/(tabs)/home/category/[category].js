@@ -8,13 +8,15 @@ import {
   ActivityIndicator,
   Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
-import { COLORS, SPACING, RADIUS } from "../../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TYPE, ICON } from "../../../../constants/theme";
 import { useCartStore } from "../../../../stores/cartStore";
 import QuantityStepper from "../../../../components/common/QuantityStepper";
 import Button from "../../../../components/common/Button";
+import Screen from "../../../../components/common/Screen";
+import Header from "../../../../components/common/Header";
+import BottomBar from "../../../../components/common/BottomBar";
 import api from "../../../../lib/api";
 import { categoryLabel } from "../../../../constants/categories";
 
@@ -103,25 +105,22 @@ export default function CategoryScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <Screen>
+        <Header title="" onBack={() => router.back()} />
         <ActivityIndicator size="large" color={COLORS.gold} style={{ marginTop: 100 }} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{title}</Text>
-        <View style={{ width: 40 }} />
+    <Screen padded={false}>
+      <View style={styles.headerPad}>
+        <Header title={title} onBack={() => router.back()} />
       </View>
 
       {rows.length === 0 ? (
         <View style={styles.empty}>
-          <Ionicons name="shirt-outline" size={48} color={COLORS.textMuted} />
+          <Ionicons name="shirt-outline" size={ICON.hero} color={COLORS.mintGreen} />
           <Text style={styles.emptyText}>No items in this category yet.</Text>
         </View>
       ) : (
@@ -129,7 +128,7 @@ export default function CategoryScreen() {
           data={rows}
           keyExtractor={(r) => r.key}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 120 }}
+          contentContainerStyle={styles.listContent}
           renderItem={({ item }) => {
             const qty = getQty(item.key);
             return (
@@ -140,7 +139,11 @@ export default function CategoryScreen() {
                   <Text style={styles.itemPrice}>₹{item.price}</Text>
                 </View>
                 {qty === 0 ? (
-                  <TouchableOpacity style={styles.addBtn} onPress={() => setQty(item.key, 1)}>
+                  <TouchableOpacity
+                    style={styles.addBtn}
+                    onPress={() => setQty(item.key, 1)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
                     <Text style={styles.addBtnText}>ADD</Text>
                   </TouchableOpacity>
                 ) : (
@@ -157,7 +160,7 @@ export default function CategoryScreen() {
       )}
 
       {localItems > 0 && (
-        <View style={styles.bottomBar}>
+        <BottomBar style={styles.bottomBarRow}>
           <View>
             <Text style={styles.bottomItems}>
               {localItems} item{localItems > 1 ? "s" : ""} selected
@@ -165,25 +168,17 @@ export default function CategoryScreen() {
             <Text style={styles.bottomAmount}>₹{localAmount}</Text>
           </View>
           <Button title="Add to Basket" onPress={handleAddToCart} style={{ paddingHorizontal: 28 }} />
-        </View>
+        </BottomBar>
       )}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg,
-    paddingVertical: SPACING.md,
-  },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
-  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: 12 },
-  emptyText: { color: COLORS.textMuted, fontSize: 14 },
+  headerPad: { paddingHorizontal: SPACING.lg },
+  empty: { flex: 1, alignItems: "center", justifyContent: "center", gap: SPACING.md },
+  emptyText: { ...TYPE.body, color: COLORS.textMuted },
+  listContent: { paddingHorizontal: SPACING.lg, paddingBottom: 120 },
   itemCard: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -197,9 +192,9 @@ const styles = StyleSheet.create({
     borderColor: COLORS.borderLight,
   },
   itemInfo: { flex: 1 },
-  itemName: { fontSize: 15, fontWeight: "600", color: COLORS.text },
-  itemService: { fontSize: 12, color: COLORS.textMuted, marginTop: 1 },
-  itemPrice: { fontSize: 14, color: COLORS.gold, fontWeight: "700", marginTop: 2 },
+  itemName: { ...TYPE.body, fontWeight: "600", color: COLORS.text },
+  itemService: { ...TYPE.caption, color: COLORS.textMuted, marginTop: 1 },
+  itemPrice: { ...TYPE.price, color: COLORS.gold, fontWeight: "700", marginTop: 2 },
   addBtn: {
     borderWidth: 1.5,
     borderColor: COLORS.gold,
@@ -207,22 +202,12 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 20,
   },
-  addBtnText: { color: COLORS.gold, fontWeight: "700", fontSize: 13 },
-  bottomBar: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
+  addBtnText: { ...TYPE.label, color: COLORS.gold, fontWeight: "700" },
+  bottomBarRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    backgroundColor: COLORS.white,
-    paddingHorizontal: SPACING.xl,
-    paddingVertical: SPACING.lg,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    elevation: 10,
   },
-  bottomItems: { fontSize: 13, color: COLORS.textLight },
-  bottomAmount: { fontSize: 20, fontWeight: "700", color: COLORS.black },
+  bottomItems: { ...TYPE.bodySm, color: COLORS.textLight },
+  bottomAmount: { ...TYPE.h2, color: COLORS.black },
 });
