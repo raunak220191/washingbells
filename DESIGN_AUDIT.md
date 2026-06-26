@@ -167,3 +167,29 @@ No regressions found; the app boots clean after the full 18-screen batch.
 `3a27954` profile/F7 · `ec2729c` wallet+help · `9d7d86f` edit/F8 · `fdcd6d9` terms+privacy ·
 `a5c8e67` address/F9 · `6e45d2f` confirming · `bbad198` auth · `0c1b3a9` reorder ·
 `ee29f38` place-order 500→400 fix.
+
+---
+
+## Android spot-check (Pixel 7, API 35 — emulator booted, checked, shut down)
+
+Per the brief, only the platform-sensitive areas were re-checked on Android (the UI is one
+shared Expo/JS codebase — `app/`, `components/common/`, `constants/` — with **zero
+`Platform.OS` branches in the primitives**, so components render identically by construction).
+Screenshots: `docs/audit/after/android-*.png`.
+
+| Platform-sensitive area | Android result |
+|---|---|
+| **Category chips** | ✅ Dry Clean — All (green active) / Men / Women / Kids / Accessories render as identical compact pills, none clipped, horizontally scrollable. The headline chip fix holds. |
+| **Headers & safe-area top spacing** | ✅ Home, Profile, Login, Dry Clean — logo/title sit below the status bar at the same offset via `<Screen>`; no notch overlap. |
+| **Bottom Pay/Place-Order bar** | ✅ Dry Clean "Add to Basket" `<BottomBar>` — gold CTA + brand upward shadow, sits cleanly above the tab bar and gesture-nav inset (`useSafeAreaInsets().bottom` works — the tab bar already proved this). |
+| Disabled `<Button>` (bonus) | ✅ Login "Login with Password" shows the intentional warm-neutral disabled pill. |
+| Profile wallet de-dupe (bonus, F7) | ✅ Single wallet entry (green card only), no duplicate menu row. |
+
+**No Android-specific correction was needed** — the shared primitives behave the same on
+both platforms.
+
+**Environmental note (not a bug from this work):** the emulator's Google "turn on device
+location" consent dialog loops on Home's *pre-existing* GPS-fallback effect
+(`getCurrentPositionAsync`) — a dev-emulator nuisance, dismissed via the back key; the app's
+own UI is unaffected. The dev-only `expo-notifications` Expo-Go push warning (F10) also
+appears, as on the prior audit — not a production issue.
