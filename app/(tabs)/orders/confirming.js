@@ -1,9 +1,9 @@
 import React, { useEffect, useRef, useState } from "react";
 import { View, Text, StyleSheet, Animated, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
+import Screen from "../../../components/common/Screen";
 import api from "../../../lib/api";
 
 const POLL_INTERVAL_MS = 5000;
@@ -71,20 +71,20 @@ export default function ConfirmingScreen() {
 
   if (phase === "confirmed") {
     return (
-      <SafeAreaView style={styles.center}>
+      <Screen padded={false} contentContainerStyle={styles.center}>
         <Ionicons name="checkmark-circle" size={80} color={COLORS.success} />
         <Text style={styles.bigTitle}>Order Confirmed!</Text>
         <Text style={styles.sub}>
           {orderNumber ? `Order ${orderNumber} accepted by the store.` : "Your order has been accepted."}
         </Text>
         <Text style={styles.subMuted}>Taking you to your orders…</Text>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (phase === "rejected") {
     return (
-      <SafeAreaView style={styles.center}>
+      <Screen padded={false} contentContainerStyle={styles.center}>
         <Ionicons name="close-circle" size={80} color={COLORS.error} />
         <Text style={styles.bigTitle}>Order Not Accepted</Text>
         <Text style={styles.sub}>{rejectNote}</Text>
@@ -100,13 +100,13 @@ export default function ConfirmingScreen() {
         >
           <Text style={styles.ordersLinkText}>View My Orders</Text>
         </TouchableOpacity>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   // polling
   return (
-    <SafeAreaView style={styles.center}>
+    <Screen padded={false} contentContainerStyle={styles.center}>
       <View style={styles.iconRing}>
         <Ionicons name="storefront" size={40} color={COLORS.gold} />
       </View>
@@ -131,7 +131,7 @@ export default function ConfirmingScreen() {
       >
         <Text style={styles.ordersLinkText}>View My Orders</Text>
       </TouchableOpacity>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
