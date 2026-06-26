@@ -7,15 +7,13 @@ import {
   TouchableOpacity,
   ActivityIndicator,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, ORDER_STATUS_LABELS, ORDER_STATUS_COLORS } from "../../../constants/theme";
+import { COLORS, SPACING, TYPE, ICON } from "../../../constants/theme";
 import { useOrderStore } from "../../../stores/orderStore";
-
-// Status badge colors live in the theme (single source of truth) so the list
-// and the order-detail screen stay in sync and cover every backend status.
-const STATUS_COLORS = ORDER_STATUS_COLORS;
+import Screen from "../../../components/common/Screen";
+import Card from "../../../components/common/Card";
+import StatusBadge from "../../../components/common/StatusBadge";
 
 export default function OrdersScreen() {
   const router = useRouter();
@@ -35,32 +33,32 @@ export default function OrdersScreen() {
 
   if (isLoading && orders.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <Screen>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Orders</Text>
         </View>
         <ActivityIndicator size="large" color={COLORS.gold} style={{ marginTop: 100 }} />
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   if (!isLoading && orders.length === 0) {
     return (
-      <SafeAreaView style={styles.container}>
+      <Screen>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Orders</Text>
         </View>
         <View style={styles.emptyState}>
-          <Ionicons name="clipboard-outline" size={80} color={COLORS.border} />
+          <Ionicons name="clipboard-outline" size={ICON.hero} color={COLORS.mintGreen} />
           <Text style={styles.emptyTitle}>No orders yet</Text>
           <Text style={styles.emptySub}>Your order history will appear here</Text>
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false}>
       <View style={styles.header}>
         <Text style={styles.headerTitle}>My Orders</Text>
       </View>
@@ -69,64 +67,41 @@ export default function OrdersScreen() {
         data={orders}
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={{ paddingHorizontal: SPACING.lg, paddingBottom: 20 }}
+        contentContainerStyle={styles.listContent}
         onRefresh={fetchOrders}
         refreshing={isLoading}
         renderItem={({ item: order }) => (
-          <TouchableOpacity
+          <Card
             style={styles.orderCard}
             onPress={() => router.push(`/(tabs)/orders/${order.id}`)}
-            activeOpacity={0.7}
           >
-            {/* Top row */}
             <View style={styles.orderTop}>
               <Text style={styles.orderNumber}>{order.order_number}</Text>
-              <View
-                style={[
-                  styles.statusBadge,
-                  { backgroundColor: (STATUS_COLORS[order.status] || COLORS.textMuted) + "20" },
-                ]}
-              >
-                <Text
-                  style={[
-                    styles.statusText,
-                    { color: STATUS_COLORS[order.status] || COLORS.textMuted },
-                  ]}
-                >
-                  {ORDER_STATUS_LABELS[order.status] || order.status}
-                </Text>
-              </View>
+              <StatusBadge status={order.status} />
             </View>
 
-            {/* Items summary */}
             <Text style={styles.itemsSummary} numberOfLines={1}>
               {order.items.map((i) => `${i.item_name} x${i.quantity}`).join(", ")}
             </Text>
 
-            {/* Bottom row */}
             <View style={styles.orderBottom}>
               <Text style={styles.orderDate}>{formatDate(order.created_at)}</Text>
               <Text style={styles.orderTotal}>₹{order.total_amount.toFixed(2)}</Text>
             </View>
-          </TouchableOpacity>
+          </Card>
         )}
       />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
   header: {
-    paddingHorizontal: SPACING.xl,
+    paddingHorizontal: SPACING.lg,
     paddingVertical: SPACING.lg,
   },
   headerTitle: {
-    fontSize: 24,
-    fontWeight: "700",
+    ...TYPE.h1,
     color: COLORS.black,
   },
   emptyState: {
@@ -136,24 +111,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: SPACING.xxxl,
   },
   emptyTitle: {
-    fontSize: 20,
-    fontWeight: "700",
+    ...TYPE.h2,
     color: COLORS.text,
     marginTop: SPACING.lg,
   },
   emptySub: {
-    fontSize: 14,
+    ...TYPE.body,
     color: COLORS.textMuted,
     textAlign: "center",
     marginTop: SPACING.sm,
   },
+  listContent: {
+    paddingHorizontal: SPACING.lg,
+    paddingBottom: SPACING.xl,
+  },
   orderCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: RADIUS.md,
-    padding: SPACING.lg,
     marginBottom: SPACING.md,
-    borderWidth: 1,
-    borderColor: COLORS.borderLight,
   },
   orderTop: {
     flexDirection: "row",
@@ -162,21 +135,12 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
   },
   orderNumber: {
-    fontSize: 15,
+    ...TYPE.body,
     fontWeight: "700",
     color: COLORS.black,
   },
-  statusBadge: {
-    paddingVertical: 3,
-    paddingHorizontal: 10,
-    borderRadius: RADIUS.full,
-  },
-  statusText: {
-    fontSize: 11,
-    fontWeight: "700",
-  },
   itemsSummary: {
-    fontSize: 13,
+    ...TYPE.bodySm,
     color: COLORS.textLight,
     marginBottom: SPACING.md,
   },
@@ -189,11 +153,11 @@ const styles = StyleSheet.create({
     paddingTop: SPACING.sm,
   },
   orderDate: {
-    fontSize: 12,
+    ...TYPE.caption,
     color: COLORS.textMuted,
   },
   orderTotal: {
-    fontSize: 16,
+    ...TYPE.price,
     fontWeight: "700",
     color: COLORS.forestGreen,
   },
