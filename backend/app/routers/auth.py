@@ -2,10 +2,14 @@ from fastapi import APIRouter, HTTPException, status, Depends
 from datetime import datetime, timezone
 from bson import ObjectId
 from app.core.database import get_db
-from app.core.security import create_access_token, get_current_user, verify_password, hash_password
+from app.core.security import (
+    create_access_token, create_refresh_token, decode_refresh_token,
+    get_current_user, verify_password, hash_password,
+)
 from app.schemas.schemas import (
     SendOTPRequest, VerifyOTPRequest, AuthResponse,
     PasswordLoginRequest, SetPasswordRequest,
+    RefreshRequest, RefreshResponse,
 )
 from app.schemas.phase2_schemas import RiderRegisterRequest, StoreRegisterRequest
 from app.services.twilio_service import send_otp, verify_otp
@@ -13,6 +17,13 @@ from app.services.email_service import send_event as send_email_event
 from app.core.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+def _token_payload(user: dict) -> dict:
+    return {
+        "user_id": str(user["_id"]), "phone": user["phone"],
+        "role": user.get("role", "customer"),
+    }
 
 
 @router.post("/send-otp")
@@ -45,13 +56,11 @@ async def verify_otp_endpoint(request: VerifyOTPRequest):
         result = await db.users.insert_one(user_doc)
         user = await db.users.find_one({"_id": result.inserted_id})
 
-    token = create_access_token(data={
-        "user_id": str(user["_id"]), "phone": user["phone"],
-        "role": user.get("role", "customer"),
-    })
-
+    payload = _token_payload(user)
     return AuthResponse(
-        access_token=token, is_new_user=is_new_user,
+        access_token=create_access_token(payload),
+        refresh_token=create_refresh_token(payload),
+        is_new_user=is_new_user,
         user={"id": str(user["_id"]), "phone": user["phone"],
               "name": user.get("name"), "email": user.get("email"),
               "role": user.get("role", "customer")},
@@ -74,15 +83,43 @@ async def login_password_endpoint(request: PasswordLoginRequest):
             detail="Invalid phone number or password.",
         )
 
-    token = create_access_token(data={
-        "user_id": str(user["_id"]), "phone": user["phone"],
-        "role": user.get("role", "customer"),
-    })
+    payload = _token_payload(user)
     return AuthResponse(
-        access_token=token, is_new_user=False,
+        access_token=create_access_token(payload),
+        refresh_token=create_refresh_token(payload),
+        is_new_user=False,
         user={"id": str(user["_id"]), "phone": user["phone"],
               "name": user.get("name"), "email": user.get("email"),
               "role": user.get("role", "customer")},
+    )
+
+
+@router.post("/refresh", response_model=RefreshResponse)
+async def refresh_endpoint(request: RefreshRequest):
+    """Exchange a valid refresh token for a fresh access + refresh token pair.
+
+    Enables persistent login: the app silently calls this when its access token
+    expires, so the user stays signed in until the refresh token expires (30d)
+    or they log out. Rotates the refresh token on each use.
+    """
+    payload = decode_refresh_token(request.refresh_token)
+    user_id = payload.get("user_id")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token payload")
+
+    db = get_db()
+    try:
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        user = None
+    if not user:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
+
+    # Re-issue from the current user record so a role change propagates.
+    new_payload = _token_payload(user)
+    return RefreshResponse(
+        access_token=create_access_token(new_payload),
+        refresh_token=create_refresh_token(new_payload),
     )
 
 

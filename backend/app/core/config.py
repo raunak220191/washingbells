@@ -12,7 +12,8 @@ class Settings(BaseSettings):
     # JWT
     JWT_SECRET_KEY: str = "dev-secret-key"
     JWT_ALGORITHM: str = "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440         # 24 hours
+    REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days (persistent login)
 
     # Twilio Verify — SMS & OTP provider (server-side only; never shipped to apps).
     # Set via .env or dev.yaml (twilio: section). Leave the Verify credentials

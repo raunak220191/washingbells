@@ -25,9 +25,20 @@ class SetPasswordRequest(BaseModel):
 
 class AuthResponse(BaseModel):
     access_token: str
+    refresh_token: Optional[str] = None  # long-lived; used for persistent login
     token_type: str = "bearer"
     is_new_user: bool
     user: dict
+
+
+class RefreshRequest(BaseModel):
+    refresh_token: str
+
+
+class RefreshResponse(BaseModel):
+    access_token: str
+    refresh_token: str
+    token_type: str = "bearer"
 
 
 # --- User Schemas ---

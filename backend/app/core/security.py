@@ -30,10 +30,41 @@ def create_access_token(data: dict) -> str:
     expire = datetime.now(timezone.utc) + timedelta(
         minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES
     )
-    to_encode.update({"exp": expire})
+    to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
     )
+
+
+def create_refresh_token(data: dict) -> str:
+    """Long-lived token used to silently mint new access tokens (persistent login)."""
+    to_encode = data.copy()
+    expire = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.REFRESH_TOKEN_EXPIRE_MINUTES
+    )
+    to_encode.update({"exp": expire, "type": "refresh"})
+    return jwt.encode(
+        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
+    )
+
+
+def decode_refresh_token(token: str) -> dict:
+    """Validate a refresh token and return its payload. Raises 401 if invalid."""
+    try:
+        payload = jwt.decode(
+            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+        )
+    except JWTError:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+    if payload.get("type") != "refresh":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Not a refresh token",
+        )
+    return payload
 
 
 def verify_token(token: str) -> dict:
