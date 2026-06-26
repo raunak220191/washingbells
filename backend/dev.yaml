@@ -1,23 +1,20 @@
 # WashingBells — development configuration
 # Non-secret service config lives here. Fill in real values for local/dev runs.
 #
-# MSG91 — SMS & OTP provider (replaces Twilio).
-# Leave auth_key empty to use the dev bypass (OTP is always 123456 and
-# invitation SMS is logged to the console instead of being sent).
-msg91:
-  auth_key: "521453AcXivOWVsoez6a1fd0b3P1"       # MSG91 Auth Key (dashboard → API)
-  base_url: "https://control.msg91.com/api/v5"
-  default_country_code: "91"                      # prepended to 10-digit numbers
-  sender_id: "smsind"                             # DLT-approved sender header
+# Twilio Verify — SMS & OTP provider (server-side only; never shipped to apps).
+# Leave the verify credentials empty to use the dev bypass (OTP is always
+# 123456 and invitation SMS is logged to the console instead of being sent).
+# NOTE: these are SECRETS — do not commit real values. Put real creds in .env
+# (TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_VERIFY_SERVICE_SID) instead.
+twilio:
+  account_sid: ""                  # ACxxxxxxxx
+  auth_token: ""                   # Twilio auth token
+  verify_service_sid: ""           # VAxxxxxxxx (Verify service)
+  default_country_code: "91"       # prepended to bare 10-digit numbers
 
-  # OTP service — MSG91 generates, sends and verifies the code server-side.
-  otp_template_id: "6a1fd3d7bbc07c3bd90e6126"     # DLT template id for the OTP service
-  otp_length: 6
-  otp_expiry_minutes: 10
-
-  # Transactional SMS (rider/store invitations) via the Flow API.
-  # The flow/template must expose variables: name, role, url.
-  invite_template_id: ""
+  # Invitation SMS (rider/store) uses Twilio Messaging — set one of these:
+  messaging_service_sid: ""        # MGxxxxxxxx (preferred)
+  from_number: ""                  # +1xxxxxxxxxx fallback sender
 
 # Razorpay — payments. Leave key_id/key_secret empty to use the dev bypass
 # (payment is auto-marked successful). With keys set, real Razorpay orders are

@@ -8,7 +8,7 @@ from app.schemas.schemas import (
     PasswordLoginRequest, SetPasswordRequest,
 )
 from app.schemas.phase2_schemas import RiderRegisterRequest, StoreRegisterRequest
-from app.services.msg91_service import send_otp, verify_otp
+from app.services.twilio_service import send_otp, verify_otp
 from app.services.email_service import send_event as send_email_event
 from app.core.config import get_settings
 

@@ -14,15 +14,16 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440  # 24 hours
 
-    # MSG91 — SMS & OTP provider. Configured via dev.yaml (msg91: section).
-    MSG91_AUTH_KEY: str = ""                                  # MSG91 Auth Key
-    MSG91_BASE_URL: str = "https://control.msg91.com/api/v5"
-    MSG91_DEFAULT_COUNTRY_CODE: str = "91"                    # prepended to 10-digit numbers
-    MSG91_SENDER_ID: str = ""                                 # 6-char DLT-approved header
-    MSG91_OTP_TEMPLATE_ID: str = ""                           # DLT template id for OTP service
-    MSG91_OTP_LENGTH: int = 6
-    MSG91_OTP_EXPIRY_MINUTES: int = 10
-    MSG91_INVITE_TEMPLATE_ID: str = ""                        # Flow template id for invitation SMS
+    # Twilio Verify — SMS & OTP provider (server-side only; never shipped to apps).
+    # Set via .env or dev.yaml (twilio: section). Leave the Verify credentials
+    # empty to use the dev bypass (OTP is always 123456).
+    TWILIO_ACCOUNT_SID: str = ""                              # ACxxxxxxxx
+    TWILIO_AUTH_TOKEN: str = ""                               # Twilio auth token
+    TWILIO_VERIFY_SERVICE_SID: str = ""                       # VAxxxxxxxx (Verify service)
+    TWILIO_DEFAULT_COUNTRY_CODE: str = "91"                   # prepended to 10-digit numbers
+    # Invitation SMS (rider/store) uses Twilio Messaging — needs one of these:
+    TWILIO_MESSAGING_SERVICE_SID: str = ""                   # MGxxxxxxxx (preferred)
+    TWILIO_FROM_NUMBER: str = ""                             # +1xxxxxxxxxx fallback sender
 
     # App URLs used in invitation SMS
     RIDER_APP_INVITE_URL: str = "https://washingbells.in/rider-app"
@@ -59,7 +60,7 @@ def _load_yaml_config() -> dict:
 
     dev.yaml lives at the backend root (alongside requirements.txt). Values
     here take precedence over .env / defaults. Each top-level section maps to a
-    prefix, e.g. `msg91.auth_key` → MSG91_AUTH_KEY, `razorpay.key_id` →
+    prefix, e.g. `twilio.account_sid` → TWILIO_ACCOUNT_SID, `razorpay.key_id` →
     RAZORPAY_KEY_ID.
     """
     path = Path(__file__).resolve().parents[2] / "dev.yaml"
@@ -68,7 +69,7 @@ def _load_yaml_config() -> dict:
     with open(path, "r") as f:
         data = yaml.safe_load(f) or {}
     out: dict = {}
-    for section in ("msg91", "razorpay"):
+    for section in ("twilio", "razorpay"):
         for key, value in (data.get(section) or {}).items():
             if value is not None and value != "":
                 out[f"{section.upper()}_{key.upper()}"] = value

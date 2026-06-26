@@ -9,7 +9,7 @@ from app.schemas.phase2_schemas import (
     AdminOrderOverride, AdminAssignStoreRequest,
     AdminAssignRiderRequest, ApprovalRequest,
 )
-from app.services.msg91_service import send_invite_sms
+from app.services.twilio_service import send_invite_sms
 from app.services.push_service import (
     notify_rider_approval, notify_rider_trip_assigned,
 )
