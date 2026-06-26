@@ -1,9 +1,9 @@
 import React from "react";
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { View, Text, StyleSheet, ScrollView } from "react-native";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
+import { COLORS, SPACING } from "../../../constants/theme";
+import Screen from "../../../components/common/Screen";
+import Header from "../../../components/common/Header";
 
 const SECTIONS = [
   {
@@ -59,13 +59,9 @@ const SECTIONS = [
 export default function PrivacyPolicyScreen() {
   const router = useRouter();
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Privacy Policy</Text>
-        <View style={{ width: 40 }} />
+    <Screen padded={false}>
+      <View style={styles.headerPad}>
+        <Header title="Privacy Policy" onBack={() => router.back()} />
       </View>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.content}>
         <Text style={styles.updated}>Last updated: May 2026</Text>
@@ -80,19 +76,13 @@ export default function PrivacyPolicyScreen() {
         ))}
         <Text style={styles.footer}>© 2026 WashingBells Private Limited. All rights reserved.</Text>
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: {
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md,
-  },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
-  content: { paddingHorizontal: SPACING.xl, paddingBottom: 40 },
+  headerPad: { paddingHorizontal: SPACING.lg },
+  content: { paddingHorizontal: SPACING.lg, paddingBottom: 40 },
   updated: { fontSize: 12, color: COLORS.textMuted, marginBottom: SPACING.md },
   intro: { fontSize: 14, color: COLORS.textLight, lineHeight: 22, marginBottom: SPACING.xl },
   section: { marginBottom: SPACING.xl },
