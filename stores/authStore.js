@@ -14,28 +14,49 @@ export const useAuthStore = create((set, get) => ({
   needsTerms: false,
   termsChecked: false,
 
-  // Initialize — check for stored token on app launch
+  // Initialize — silently restore the session on app launch (persistent login).
   initialize: async () => {
     try {
-      const token = await SecureStore.getItemAsync("auth_token");
-      if (token) {
-        // Validate token by fetching profile
-        const response = await api.get("/users/me");
-        set({
-          user: response.data,
-          token,
-          isAuthenticated: true,
-          isLoading: false,
-        });
-        registerForPushNotifications().catch(() => {});
-      } else {
-        set({ isLoading: false });
+      let token = await SecureStore.getItemAsync("auth_token");
+      // No access token but maybe a valid refresh token (e.g. the access token
+      // expired while the app was closed) — mint a fresh one before giving up.
+      if (!token) {
+        token = await get().refreshSession().catch(() => null);
       }
+      if (!token) {
+        set({ isLoading: false });
+        return;
+      }
+      // Validate by fetching the profile. If the access token expires mid-flight,
+      // the api 401 interceptor refreshes and retries transparently.
+      const response = await api.get("/users/me");
+      const current = await SecureStore.getItemAsync("auth_token");
+      set({
+        user: response.data,
+        token: current || token,
+        isAuthenticated: true,
+        isLoading: false,
+      });
+      registerForPushNotifications().catch(() => {});
     } catch (error) {
-      // Token invalid — clear it
+      // Session unrecoverable — clear both tokens and fall back to login.
       await SecureStore.deleteItemAsync("auth_token").catch(() => {});
+      await SecureStore.deleteItemAsync("refresh_token").catch(() => {});
       set({ user: null, token: null, isAuthenticated: false, isLoading: false });
     }
+  },
+
+  // Exchange the stored refresh token for a fresh access+refresh pair.
+  // Returns the new access token, or null when there is no refresh token.
+  refreshSession: async () => {
+    const rt = await SecureStore.getItemAsync("refresh_token");
+    if (!rt) return null;
+    const response = await api.post("/auth/refresh", { refresh_token: rt });
+    const { access_token, refresh_token } = response.data;
+    await SecureStore.setItemAsync("auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("refresh_token", refresh_token);
+    set({ token: access_token });
+    return access_token;
   },
 
   // Send OTP
@@ -47,9 +68,10 @@ export const useAuthStore = create((set, get) => ({
   // Verify OTP and log in
   verifyOTP: async (phone, code) => {
     const response = await api.post("/auth/verify-otp", { phone, code });
-    const { access_token, is_new_user, user } = response.data;
+    const { access_token, refresh_token, is_new_user, user } = response.data;
 
     await SecureStore.setItemAsync("auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("refresh_token", refresh_token);
     set({
       user,
       token: access_token,
@@ -63,9 +85,10 @@ export const useAuthStore = create((set, get) => ({
   // Log in with phone + password (OTP bypass)
   loginWithPassword: async (phone, password) => {
     const response = await api.post("/auth/login-password", { phone, password });
-    const { access_token, is_new_user, user } = response.data;
+    const { access_token, refresh_token, is_new_user, user } = response.data;
 
     await SecureStore.setItemAsync("auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("refresh_token", refresh_token);
     set({
       user,
       token: access_token,
@@ -120,6 +143,7 @@ export const useAuthStore = create((set, get) => ({
   logout: async () => {
     await unregisterPushNotifications().catch(() => {});
     await SecureStore.deleteItemAsync("auth_token").catch(() => {});
+    await SecureStore.deleteItemAsync("refresh_token").catch(() => {});
     set({
       user: null,
       token: null,

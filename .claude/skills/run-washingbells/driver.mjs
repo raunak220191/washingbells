@@ -50,6 +50,28 @@ async function shot(page, out) {
   log("screenshot ->", out);
 }
 
+async function doLogin(page, phone, password) {
+  await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 90000 });
+  await waitForApp(page);
+  await page.fill('input[placeholder="Enter mobile number"]', phone);
+  await page.fill('input[placeholder="Password"]', password);
+  log(`submitting login for ${phone}…`);
+  await page.getByText("Login with Password", { exact: false }).click();
+  // Wait for the Home screen to appear (greeting text) rather than a fixed sleep.
+  await page.waitForFunction(
+    () => (document.body?.innerText || "").includes("Good Morning") ||
+          (document.body?.innerText || "").includes("Good Afternoon") ||
+          (document.body?.innerText || "").includes("Good Evening") ||
+          (document.body?.innerText || "").includes("Our Services"),
+    null, { timeout: 20000, polling: 300 }
+  );
+  log("reached Home.");
+}
+
+function onHome(text) {
+  return /Good (Morning|Afternoon|Evening)|Our Services/.test(text);
+}
+
 async function main() {
   const browser = await chromium.launch({ headless: !HEADED });
   const context = await browser.newContext({
@@ -83,17 +105,45 @@ async function main() {
     } else if (cmd === "login") {
       const [phone, password, out = "/tmp/wb-login.png"] = rest;
       if (!phone || !password) throw new Error("login needs <phone> <password>");
-      await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 90000 });
-      await waitForApp(page);
-      await page.fill('input[placeholder="Enter mobile number"]', phone);
-      await page.fill('input[placeholder="Password"]', password);
-      log(`submitting login for ${phone}…`);
-      // Button is a react-native-web TouchableOpacity rendering its title text.
-      await page.getByText("Login with Password", { exact: false }).click();
-      await page.waitForTimeout(4000); // let the API round-trip / navigation settle
+      try {
+        await doLogin(page, phone, password);
+      } catch {
+        log("did not reach Home (backend down or bad creds?)");
+      }
       await shot(page, out);
       const body = (await page.innerText("body")).slice(0, 400);
       log("post-login body sample:", JSON.stringify(body));
+    } else if (cmd === "persist") {
+      // Verify persistent login: log in, then reload the SAME browser context
+      // (localStorage retained) and confirm we land on Home without re-login.
+      const [phone, password, out = "/tmp/wb-persist.png"] = rest;
+      if (!phone || !password) throw new Error("persist needs <phone> <password>");
+      await doLogin(page, phone, password);
+      const hasRefresh = await page.evaluate(() => !!localStorage.getItem("refresh_token"));
+      log("refresh_token stored after login:", hasRefresh);
+      log("reloading page to test silent session restore…");
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 90000 });
+      await page.waitForTimeout(5000);
+      const text = await page.innerText("body");
+      await shot(page, out);
+      if (onHome(text)) log("PASS: session restored to Home after reload");
+      else { log("FAIL: not on Home after reload. Body:", JSON.stringify(text.slice(0, 200))); exitCode = 1; }
+    } else if (cmd === "refresh-restore") {
+      // Verify refresh-token cold start: log in, drop the access token (keep the
+      // refresh token), reload → initialize() should mint a new access token.
+      const [phone, password, out = "/tmp/wb-refresh.png"] = rest;
+      if (!phone || !password) throw new Error("refresh-restore needs <phone> <password>");
+      await doLogin(page, phone, password);
+      await page.evaluate(() => localStorage.removeItem("auth_token"));
+      log("removed auth_token, kept refresh_token; reloading…");
+      await page.reload({ waitUntil: "domcontentloaded", timeout: 90000 });
+      await page.waitForTimeout(6000);
+      const text = await page.innerText("body");
+      const newAccess = await page.evaluate(() => !!localStorage.getItem("auth_token"));
+      await shot(page, out);
+      log("auth_token re-minted via refresh:", newAccess);
+      if (onHome(text) && newAccess) log("PASS: refresh-token cold start restored session");
+      else { log("FAIL: refresh restore did not reach Home. Body:", JSON.stringify(text.slice(0, 200))); exitCode = 1; }
     } else {
       throw new Error(`unknown command: ${cmd}`);
     }
