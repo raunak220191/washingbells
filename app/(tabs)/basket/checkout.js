@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert,
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TINTS, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
 import { useCartStore } from "../../../stores/cartStore";
 import { useOrderStore } from "../../../stores/orderStore";
 import { useAddressStore } from "../../../stores/addressStore";
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   slotTextDisabled: { color: COLORS.textMuted, textDecorationLine: "line-through" },
   slotTagFull: { fontSize: 9, color: COLORS.error, fontWeight: "800", letterSpacing: 0.5 },
   slotHint: { fontSize: 12, color: COLORS.textMuted, fontStyle: "italic", paddingVertical: SPACING.md },
-  slotClosedBox: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, backgroundColor: "#FFEBEE", padding: SPACING.md, borderRadius: RADIUS.sm },
+  slotClosedBox: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, backgroundColor: TINTS.errorBg, padding: SPACING.md, borderRadius: RADIUS.sm },
   slotClosedText: { flex: 1, fontSize: 12, color: COLORS.error, fontWeight: "600", lineHeight: 17 },
   instructionsInput: { backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACING.md, fontSize: 14, color: COLORS.text, minHeight: 80, textAlignVertical: "top" },
   couponRow: { flexDirection: "row", gap: SPACING.sm },

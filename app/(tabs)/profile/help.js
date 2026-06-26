@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Linking, Alert } 
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TINTS } from "../../../constants/theme";
 
 const SUPPORT_PHONE = "+911234567890";
 const SUPPORT_WHATSAPP = "+911234567890";
@@ -44,18 +44,18 @@ export default function HelpScreen() {
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Contact Cards */}
         <View style={styles.contactRow}>
-          <TouchableOpacity style={[styles.contactCard, { backgroundColor: "#E8F5E9" }]} onPress={openWhatsApp}>
-            <Ionicons name="logo-whatsapp" size={28} color="#25D366" />
+          <TouchableOpacity style={[styles.contactCard, { backgroundColor: TINTS.successBg }]} onPress={openWhatsApp}>
+            <Ionicons name="logo-whatsapp" size={28} color={TINTS.whatsapp} />
             <Text style={styles.contactLabel}>WhatsApp</Text>
             <Text style={styles.contactSub}>Chat with us</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.contactCard, { backgroundColor: "#E3F2FD" }]} onPress={callSupport}>
-            <Ionicons name="call" size={28} color="#1976D2" />
+          <TouchableOpacity style={[styles.contactCard, { backgroundColor: TINTS.infoBg }]} onPress={callSupport}>
+            <Ionicons name="call" size={28} color={TINTS.infoText} />
             <Text style={styles.contactLabel}>Call Us</Text>
             <Text style={styles.contactSub}>Talk to support</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.contactCard, { backgroundColor: "#FFF3E0" }]} onPress={emailSupport}>
-            <Ionicons name="mail" size={28} color="#E65100" />
+          <TouchableOpacity style={[styles.contactCard, { backgroundColor: TINTS.warningBg }]} onPress={emailSupport}>
+            <Ionicons name="mail" size={28} color={TINTS.warningText} />
             <Text style={styles.contactLabel}>Email</Text>
             <Text style={styles.contactSub}>Write to us</Text>
           </TouchableOpacity>

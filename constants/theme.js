@@ -98,6 +98,20 @@ export const ORDER_STATUS_LABELS = {
   rejected: "Not Accepted",
 };
 
+// Semantic surface tints — status banners/badges and contact-channel colors.
+// Single source of truth so screens stop hardcoding hex (see brand guidelines).
+export const TINTS = {
+  successBg: "#E8F5E9",
+  successText: "#155724",
+  errorBg: "#FFEBEE",
+  errorText: "#721C24",
+  infoBg: "#E3F2FD",
+  infoText: "#1976D2",
+  warningBg: "#FFF3E0",
+  warningText: "#E65100",
+  whatsapp: "#25D366",
+};
+
 // Single source of truth for order-status badge colors. Every status in the
 // backend lifecycle is mapped so badges never fall back to raw grey text.
 export const ORDER_STATUS_COLORS = {
