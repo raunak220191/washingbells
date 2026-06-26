@@ -3,12 +3,12 @@ import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity,
   ActivityIndicator, Alert,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS } from "../../constants/theme";
 import { useAuthStore } from "../../stores/authStore";
 import HtmlText from "../../components/common/HtmlText";
+import Screen from "../../components/common/Screen";
 
 export default function TermsScreen() {
   const router = useRouter();
@@ -48,18 +48,18 @@ export default function TermsScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <Screen padded={false}>
         <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
           <ActivityIndicator color={COLORS.forestGreen} />
         </View>
-      </SafeAreaView>
+      </Screen>
     );
   }
 
   const hasContent = terms?.content_html && terms.version > 0;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false} edges={["top", "bottom"]}>
       <View style={styles.header}>
         <Ionicons name="document-text" size={26} color={COLORS.white} />
         <View style={{ flex: 1, marginLeft: SPACING.md }}>
@@ -106,12 +106,11 @@ export default function TermsScreen() {
           By tapping "I Accept", you agree to the WashingBells Terms of Service.
         </Text>
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
   header: {
     flexDirection: "row", alignItems: "center", backgroundColor: COLORS.forestGreen,
     paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg,

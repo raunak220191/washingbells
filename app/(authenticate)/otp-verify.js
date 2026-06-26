@@ -9,12 +9,12 @@ import {
   Platform,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { COLORS, SPACING, RADIUS } from "../../constants/theme";
 import { useAuthStore } from "../../stores/authStore";
 import Button from "../../components/common/Button";
+import Screen from "../../components/common/Screen";
 
 const OTP_LENGTH = 6;
 
@@ -87,7 +87,7 @@ export default function OTPVerifyScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.content}
@@ -147,15 +147,11 @@ export default function OTPVerifyScreen() {
           <Text style={styles.devHint}>Dev mode: use code 123456</Text>
         )}
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
   content: {
     flex: 1,
     paddingHorizontal: SPACING.xl,
@@ -202,7 +198,7 @@ const styles = StyleSheet.create({
   },
   otpInputFilled: {
     borderColor: COLORS.gold,
-    backgroundColor: "#FDF9F0",
+    backgroundColor: COLORS.gold + "12",
   },
   resendRow: {
     alignItems: "center",

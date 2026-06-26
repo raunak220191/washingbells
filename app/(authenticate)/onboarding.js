@@ -8,11 +8,11 @@ import {
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS } from "../../constants/theme";
 import { useAuthStore } from "../../stores/authStore";
 import Button from "../../components/common/Button";
+import Screen from "../../components/common/Screen";
 
 export default function OnboardingScreen() {
   const [name, setName] = useState("");
@@ -43,7 +43,7 @@ export default function OnboardingScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.content}
@@ -85,15 +85,11 @@ export default function OnboardingScreen() {
           style={{ marginTop: SPACING.xxxl }}
         />
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
   content: {
     flex: 1,
     paddingHorizontal: SPACING.xl,

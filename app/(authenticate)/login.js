@@ -10,11 +10,11 @@ import {
   Alert,
   TouchableOpacity,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS } from "../../constants/theme";
 import { useAuthStore } from "../../stores/authStore";
 import Button from "../../components/common/Button";
+import Screen from "../../components/common/Screen";
 
 export default function LoginScreen() {
   const [phone, setPhone] = useState("");
@@ -70,7 +70,7 @@ export default function LoginScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false}>
       <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={styles.content}
@@ -154,15 +154,11 @@ export default function LoginScreen() {
           <Text style={styles.link}>Privacy Policy</Text>
         </Text>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
   content: {
     flex: 1,
     paddingHorizontal: SPACING.xl,
