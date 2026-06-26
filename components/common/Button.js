@@ -1,49 +1,85 @@
 import React from "react";
-import { TouchableOpacity, Text, StyleSheet, ActivityIndicator } from "react-native";
-import { COLORS, RADIUS } from "../../constants/theme";
+import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, View } from "react-native";
+import { COLORS, RADIUS, SPACING, TYPE, SHADOWS } from "../../constants/theme";
 
+/**
+ * Button — the one button. Variants: primary (gold CTA), secondary (forest),
+ * outline, ghost. Sizes: md (default), lg, sm.
+ *
+ * Disabled is an OBVIOUSLY intentional state: a warm neutral surface + muted
+ * label that keeps the button's full shape — never a cold broken grey.
+ */
 export default function Button({
   title,
   onPress,
-  variant = "primary", // primary | secondary | outline
+  variant = "primary", // primary | secondary | outline | ghost
+  size = "md", // sm | md | lg
   disabled = false,
   loading = false,
+  fullWidth = false,
+  icon = null, // optional leading node
   style,
   textStyle,
 }) {
-  const bgColor =
-    variant === "primary"
-      ? COLORS.gold
-      : variant === "secondary"
-      ? COLORS.forestGreen
-      : "transparent";
+  const isDisabled = disabled || loading;
 
-  const txtColor =
-    variant === "outline" ? COLORS.forestGreen : COLORS.white;
+  const palette = {
+    primary: { bg: COLORS.gold, fg: COLORS.white, border: "transparent" },
+    secondary: { bg: COLORS.forestGreen, fg: COLORS.white, border: "transparent" },
+    outline: { bg: "transparent", fg: COLORS.forestGreen, border: COLORS.forestGreen },
+    ghost: { bg: "transparent", fg: COLORS.forestGreen, border: "transparent" },
+  }[variant];
 
-  const borderStyle =
-    variant === "outline"
-      ? { borderWidth: 1.5, borderColor: COLORS.forestGreen }
-      : {};
+  const sizing = {
+    sm: { paddingVertical: 8, paddingHorizontal: SPACING.lg, font: TYPE.label },
+    md: { paddingVertical: 13, paddingHorizontal: SPACING.xxl, font: TYPE.bodyLg },
+    lg: { paddingVertical: 16, paddingHorizontal: SPACING.xxl, font: TYPE.bodyLg },
+  }[size];
+
+  const bg = isDisabled
+    ? variant === "outline" || variant === "ghost"
+      ? "transparent"
+      : COLORS.disabledBg
+    : palette.bg;
+
+  const fg = isDisabled ? COLORS.disabledText : palette.fg;
+
+  const borderColor = isDisabled
+    ? variant === "outline"
+      ? COLORS.disabledBg
+      : "transparent"
+    : palette.border;
+
+  const elevated = variant === "primary" && !isDisabled;
 
   return (
     <TouchableOpacity
       onPress={onPress}
-      disabled={disabled || loading}
-      activeOpacity={0.7}
+      disabled={isDisabled}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityState={{ disabled: isDisabled }}
       style={[
         styles.button,
-        { backgroundColor: disabled ? "#D3D3D3" : bgColor },
-        borderStyle,
+        {
+          paddingVertical: sizing.paddingVertical,
+          paddingHorizontal: sizing.paddingHorizontal,
+          backgroundColor: bg,
+          borderColor,
+          borderWidth: borderColor === "transparent" ? 0 : 1.5,
+        },
+        elevated && SHADOWS.card,
+        fullWidth && styles.fullWidth,
         style,
       ]}
     >
       {loading ? (
-        <ActivityIndicator size="small" color={txtColor} />
+        <ActivityIndicator size="small" color={fg} />
       ) : (
-        <Text style={[styles.text, { color: disabled ? "#999" : txtColor }, textStyle]}>
-          {title}
-        </Text>
+        <View style={styles.content}>
+          {icon ? <View style={styles.icon}>{icon}</View> : null}
+          <Text style={[sizing.font, styles.text, { color: fg }, textStyle]}>{title}</Text>
+        </View>
       )}
     </TouchableOpacity>
   );
@@ -51,14 +87,12 @@ export default function Button({
 
 const styles = StyleSheet.create({
   button: {
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: RADIUS.md,
+    borderRadius: RADIUS.full,
     alignItems: "center",
     justifyContent: "center",
   },
-  text: {
-    fontSize: 16,
-    fontWeight: "700",
-  },
+  fullWidth: { alignSelf: "stretch", width: "100%" },
+  content: { flexDirection: "row", alignItems: "center", justifyContent: "center" },
+  icon: { marginRight: SPACING.sm },
+  text: { fontWeight: "700" },
 });

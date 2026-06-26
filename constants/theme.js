@@ -23,6 +23,11 @@ export const COLORS = {
   borderLight: "#F0F0F0",
   shadow: "#00000010",
 
+  // Disabled controls — warm neutral so it reads as intentional within the
+  // cream/gold palette (not a cold "broken" grey).
+  disabledBg: "#E6E4DD",
+  disabledText: "#A8A49B",
+
   // Status
   success: "#34C759",
   error: "#FF3B30",
