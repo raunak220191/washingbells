@@ -219,7 +219,7 @@ export default function CheckoutScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Ionicons name="arrow-back" size={24} color={COLORS.black} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Schedule & Pay</Text>
@@ -628,9 +628,9 @@ const styles = StyleSheet.create({
   storeName: { fontSize: 14, fontWeight: "700", color: COLORS.black },
   storeAddress: { fontSize: 12, color: COLORS.textLight, marginTop: 2 },
   storeMetaRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, marginTop: SPACING.xs },
-  openBadge: { backgroundColor: "#D4EDDA", paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.full },
-  openBadgeText: { fontSize: 10, fontWeight: "700", color: "#155724" },
-  closedBadge: { backgroundColor: "#F8D7DA" },
-  closedBadgeText: { color: "#721C24" },
+  openBadge: { backgroundColor: TINTS.successBg, paddingHorizontal: 8, paddingVertical: 2, borderRadius: RADIUS.full },
+  openBadgeText: { fontSize: 10, fontWeight: "700", color: TINTS.successText },
+  closedBadge: { backgroundColor: TINTS.errorBg },
+  closedBadgeText: { color: TINTS.errorText },
   storeDist: { fontSize: 11, color: COLORS.textMuted },
 });

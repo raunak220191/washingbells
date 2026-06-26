@@ -100,6 +100,10 @@ export const ORDER_STATUS_LABELS = {
 
 // Semantic surface tints — status banners/badges and contact-channel colors.
 // Single source of truth so screens stop hardcoding hex (see brand guidelines).
+// CANONICAL SET (decided 2026-06-26, overnight-design audit): Material-family
+// pastel backgrounds (already used by Help cards, the profile email banner and
+// wallet) paired with high-contrast text. The old Bootstrap badge palette
+// (#D4EDDA/#155724/#F8D7DA) used on checkout was migrated here — do not reintroduce.
 export const TINTS = {
   successBg: "#E8F5E9",
   successText: "#155724",
