@@ -5,9 +5,13 @@ import MaterialCommunityIcons from "@expo/vector-icons/MaterialCommunityIcons";
 import { COLORS } from "../../constants/theme";
 import { useCartStore } from "../../stores/cartStore";
 import { View, Text } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 export default function TabLayout() {
   const totalItems = useCartStore((s) => s.totalItems);
+  // Reserve the device's bottom safe-area inset (Android gesture/nav bar, iOS
+  // home indicator) so tab labels never sit under or get clipped by it.
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -17,9 +21,9 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
-          paddingTop: 4,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
+          paddingTop: 6,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
