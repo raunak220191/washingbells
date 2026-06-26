@@ -1,12 +1,12 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TYPE } from "../../../constants/theme";
 import { useAuthStore } from "../../../stores/authStore";
 import { useWalletStore } from "../../../stores/walletStore";
 import ReferEarn from "../../../components/home/ReferEarn";
+import Screen from "../../../components/common/Screen";
 
 export default function ProfileScreen() {
   const { user, logout } = useAuthStore();
@@ -23,8 +23,9 @@ export default function ProfileScreen() {
     ]);
   };
 
+  // NOTE: WB Wallet intentionally omitted here \u2014 the green balance card above is
+  // the single entry point to the wallet (was duplicated as a menu row too).
   const menuItems = [
-    { icon: "wallet-outline", label: "WB Wallet", sub: "Balance: \u20B9" + balance.toFixed(0), onPress: () => router.push("/(tabs)/profile/wallet") },
     { icon: "location-outline", label: "My Addresses", onPress: () => router.push("/(tabs)/home/address") },
     { icon: "gift-outline", label: "Refer & Earn", sub: "Earn 20% off per referral", onPress: () => setShowReferral(true) },
     { icon: "help-circle-outline", label: "Help & Support", onPress: () => router.push("/(tabs)/profile/help") },
@@ -35,7 +36,7 @@ export default function ProfileScreen() {
   const initials = user?.name ? user.name.charAt(0).toUpperCase() : "U";
 
   return (
-    <SafeAreaView style={styles.container}>
+    <Screen padded={false}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <View style={styles.header}><Text style={styles.headerTitle}>Profile</Text></View>
 
@@ -115,14 +116,13 @@ export default function ProfileScreen() {
       </ScrollView>
 
       {showReferral && <ReferEarn visible={showReferral} onClose={() => setShowReferral(false)} />}
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg },
-  headerTitle: { fontSize: 24, fontWeight: "700", color: COLORS.black },
+  header: { paddingHorizontal: SPACING.lg, paddingVertical: SPACING.lg },
+  headerTitle: { ...TYPE.h1, color: COLORS.black },
   userCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, padding: SPACING.lg, borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border },
   avatar: { width: 56, height: 56, borderRadius: 28, backgroundColor: COLORS.mintGreen, justifyContent: "center", alignItems: "center", borderWidth: 2, borderColor: COLORS.gold },
   avatarImage: { width: 56, height: 56, borderRadius: 28, borderWidth: 2, borderColor: COLORS.gold },
@@ -139,7 +139,7 @@ const styles = StyleSheet.create({
   },
   emailPromptIcon: {
     width: 34, height: 34, borderRadius: 17,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: COLORS.white,
     alignItems: "center", justifyContent: "center",
   },
   emailPromptTitle: { fontSize: 13, fontWeight: "700", color: COLORS.forestGreen },
