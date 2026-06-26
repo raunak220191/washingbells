@@ -4,9 +4,12 @@ import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS, TYPE, TINTS } from "../../../constants/theme";
 import { useOrderStore } from "../../../stores/orderStore";
+import { useCartStore } from "../../../stores/cartStore";
+import { reorderToCart } from "../../../lib/reorder";
 import RescheduleModal from "../../../components/RescheduleModal";
 import Screen from "../../../components/common/Screen";
 import Header from "../../../components/common/Header";
+import Button from "../../../components/common/Button";
 import StatusBadge from "../../../components/common/StatusBadge";
 import PriceRow from "../../../components/common/PriceRow";
 import BottomBar from "../../../components/common/BottomBar";
@@ -47,14 +50,36 @@ export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const { currentOrder, fetchOrder, cancelOrder } = useOrderStore();
+  const addItem = useCartStore((s) => s.addItem);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
   const [billLoading, setBillLoading] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   useEffect(() => { fetchOrder(id).finally(() => setLoading(false)); }, [id]);
 
   const order = currentOrder;
+
+  const handleReorder = async () => {
+    setReordering(true);
+    try {
+      const { added, skipped } = await reorderToCart(order, addItem);
+      if (added === 0) {
+        Alert.alert("Unavailable", "These items aren't available to reorder right now.");
+        return;
+      }
+      const note = skipped > 0 ? ` (${skipped} item${skipped > 1 ? "s" : ""} no longer available)` : "";
+      Alert.alert("Added to Basket", `${added} item${added > 1 ? "s" : ""} added to your basket${note}.`, [
+        { text: "Keep Browsing" },
+        { text: "View Basket", onPress: () => router.replace("/(tabs)/basket") },
+      ]);
+    } catch (e) {
+      Alert.alert("Error", "Could not reorder. Please try again.");
+    } finally {
+      setReordering(false);
+    }
+  };
 
   const handleCancel = () => {
     Alert.alert("Cancel Order", "Are you sure?", [
@@ -236,23 +261,35 @@ export default function OrderDetailScreen() {
       </ScrollView>
 
       {/* Bottom Actions */}
-      <BottomBar style={styles.bottomBarRow}>
-        {isCODPending && (
-          <TouchableOpacity style={styles.payNowBtn} onPress={handlePayNow} disabled={payLoading}>
-            {payLoading ? <ActivityIndicator color={COLORS.white} /> : <><Ionicons name="card" size={18} color={COLORS.white} /><Text style={styles.payNowText}>Pay Now ₹{order.total_amount.toFixed(0)}</Text></>}
-          </TouchableOpacity>
+      <BottomBar>
+        {(isCODPending || canReschedule || canCancel) && (
+          <View style={styles.actionRow}>
+            {isCODPending && (
+              <TouchableOpacity style={styles.payNowBtn} onPress={handlePayNow} disabled={payLoading}>
+                {payLoading ? <ActivityIndicator color={COLORS.white} /> : <><Ionicons name="card" size={18} color={COLORS.white} /><Text style={styles.payNowText}>Pay Now ₹{order.total_amount.toFixed(0)}</Text></>}
+              </TouchableOpacity>
+            )}
+            {canReschedule && (
+              <TouchableOpacity style={styles.rescheduleBtn} onPress={() => setShowReschedule(true)}>
+                <Ionicons name="calendar-outline" size={17} color={COLORS.forestGreen} />
+                <Text style={styles.rescheduleText}>Reschedule</Text>
+              </TouchableOpacity>
+            )}
+            {canCancel && (
+              <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
+                <Text style={styles.cancelText}>Cancel Order</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         )}
-        {canReschedule && (
-          <TouchableOpacity style={styles.rescheduleBtn} onPress={() => setShowReschedule(true)}>
-            <Ionicons name="calendar-outline" size={17} color={COLORS.forestGreen} />
-            <Text style={styles.rescheduleText}>Reschedule</Text>
-          </TouchableOpacity>
-        )}
-        {canCancel && (
-          <TouchableOpacity style={styles.cancelBtn} onPress={handleCancel}>
-            <Text style={styles.cancelText}>Cancel Order</Text>
-          </TouchableOpacity>
-        )}
+        <Button
+          title="Order Again"
+          variant="secondary"
+          fullWidth
+          loading={reordering}
+          onPress={handleReorder}
+          style={(isCODPending || canReschedule || canCancel) ? { marginTop: SPACING.sm } : undefined}
+        />
       </BottomBar>
 
       <RescheduleModal
@@ -317,7 +354,7 @@ const styles = StyleSheet.create({
   scheduleVal: { fontSize: 11, color: COLORS.textMuted, marginTop: 2 },
   instructions: { fontSize: 13, color: COLORS.textLight, lineHeight: 20, backgroundColor: COLORS.white, padding: SPACING.md, borderRadius: RADIUS.md },
   // Bottom
-  bottomBarRow: { flexDirection: "row", justifyContent: "center", gap: SPACING.md },
+  actionRow: { flexDirection: "row", justifyContent: "center", gap: SPACING.md },
   payNowBtn: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.forestGreen, paddingHorizontal: 24, paddingVertical: 14, borderRadius: RADIUS.full },
   payNowText: { color: COLORS.white, fontWeight: "700", fontSize: 15, marginLeft: 8 },
   cancelBtn: { paddingHorizontal: 24, paddingVertical: 14, borderRadius: RADIUS.full, borderWidth: 1.5, borderColor: COLORS.error },
