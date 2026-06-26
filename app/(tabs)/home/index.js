@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { StyleSheet, View, ScrollView, StatusBar } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { View, ScrollView } from "react-native";
 import * as Location from "expo-location";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING } from "../../../constants/theme";
+import Screen from "../../../components/common/Screen";
 import { useAuthStore } from "../../../stores/authStore";
 import { useCartStore } from "../../../stores/cartStore";
 import { useAddressStore } from "../../../stores/addressStore";
@@ -61,8 +60,7 @@ export default function HomeScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" />
+    <Screen padded={false}>
       <ScrollView showsVerticalScrollIndicator={false}>
         <HomeHeader />
         <LocationBar
@@ -78,10 +76,6 @@ export default function HomeScreen() {
         <Testimonials testimonials={testimonials} />
         <View style={{ height: 40 }} />
       </ScrollView>
-    </SafeAreaView>
+    </Screen>
   );
 }
-
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-});
