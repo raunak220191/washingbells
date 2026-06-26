@@ -15,6 +15,7 @@ export default function PriceRow({
   emphasis = false,
   muted = false,
   free = false,
+  positive = false,
   style,
 }) {
   const display =
@@ -30,7 +31,7 @@ export default function PriceRow({
           styles.value,
           emphasis && styles.valueEmphasis,
           muted && styles.muted,
-          free && styles.free,
+          (free || positive) && styles.free,
         ]}
       >
         {free ? "FREE" : display}

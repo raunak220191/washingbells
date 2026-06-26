@@ -1,9 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, TextInput, Alert, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, TINTS, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
+import { COLORS, SPACING, RADIUS, TYPE, TINTS, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
 import { useCartStore } from "../../../stores/cartStore";
 import { useOrderStore } from "../../../stores/orderStore";
 import { useAddressStore } from "../../../stores/addressStore";
@@ -11,6 +10,11 @@ import { useCouponStore } from "../../../stores/couponStore";
 import { useWalletStore } from "../../../stores/walletStore";
 import { useAuthStore } from "../../../stores/authStore";
 import Button from "../../../components/common/Button";
+import Screen from "../../../components/common/Screen";
+import Header from "../../../components/common/Header";
+import Chip, { ChipRow } from "../../../components/common/Chip";
+import PriceRow from "../../../components/common/PriceRow";
+import BottomBar from "../../../components/common/BottomBar";
 import RazorpayCheckout from "../../../lib/RazorpayCheckout";
 import api from "../../../lib/api";
 
@@ -217,13 +221,9 @@ export default function CheckoutScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Ionicons name="arrow-back" size={24} color={COLORS.black} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Schedule & Pay</Text>
-        <View style={{ width: 40 }} />
+    <Screen padded={false}>
+      <View style={styles.headerPad}>
+        <Header title="Schedule & Pay" onBack={() => router.back()} />
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 160 }}>
@@ -343,13 +343,16 @@ export default function CheckoutScreen() {
         {/* Pickup Schedule */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Pickup Schedule</Text>
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.pillScroll}>
+          <ChipRow style={styles.pillScroll}>
             {availableDates.map((d) => (
-              <TouchableOpacity key={d.value} style={[styles.pill, pickupDate === d.value && styles.pillActive]} onPress={() => setPickupDate(d.value)}>
-                <Text style={[styles.pillText, pickupDate === d.value && styles.pillTextActive]}>{d.label}</Text>
-              </TouchableOpacity>
+              <Chip
+                key={d.value}
+                label={d.label}
+                active={pickupDate === d.value}
+                onPress={() => setPickupDate(d.value)}
+              />
             ))}
-          </ScrollView>
+          </ChipRow>
           {!selectedStore ? (
             <Text style={styles.slotHint}>Select a store above to see available slots.</Text>
           ) : slotsLoading ? (
@@ -487,35 +490,20 @@ export default function CheckoutScreen() {
         {/* Order Summary */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Order Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Items ({totalItems})</Text>
-            <Text style={styles.summaryValue}>₹{totalAmount.toFixed(2)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Delivery</Text>
-            <Text style={[styles.summaryValue, deliveryFee === 0 && { color: COLORS.success }]}>{deliveryFee === 0 ? "FREE" : `₹${deliveryFee}`}</Text>
-          </View>
+          <PriceRow label={`Items (${totalItems})`} value={totalAmount} />
+          <PriceRow label="Delivery" value={deliveryFee} free={deliveryFee === 0} />
           {discount > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Discount</Text>
-              <Text style={[styles.summaryValue, { color: COLORS.success }]}>-₹{discount.toFixed(2)}</Text>
-            </View>
+            <PriceRow label="Discount" value={`-₹${discount.toFixed(2)}`} positive />
           )}
           {walletApplied > 0 && (
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>WB Wallet</Text>
-              <Text style={[styles.summaryValue, { color: COLORS.success }]}>-₹{walletApplied.toFixed(2)}</Text>
-            </View>
+            <PriceRow label="WB Wallet" value={`-₹${walletApplied.toFixed(2)}`} positive />
           )}
-          <View style={[styles.summaryRow, styles.summaryTotal]}>
-            <Text style={styles.totalLabel}>Total</Text>
-            <Text style={styles.totalValue}>₹{grandTotal.toFixed(2)}</Text>
-          </View>
+          <PriceRow label="Total" value={grandTotal} emphasis style={styles.summaryTotal} />
         </View>
       </ScrollView>
 
       {/* Bottom CTA */}
-      <View style={styles.bottomBar}>
+      <BottomBar style={styles.bottomBarRow}>
         <View>
           <Text style={styles.bottomAmount}>₹{grandTotal.toFixed(2)}</Text>
           <Text style={styles.bottomSub}>{paymentMethod === "cod" ? "Cash on Delivery" : "Pay online"}</Text>
@@ -527,7 +515,7 @@ export default function CheckoutScreen() {
           disabled={!pickupSlot}
           style={{ paddingHorizontal: 24 }}
         />
-      </View>
+      </BottomBar>
 
       {/* Razorpay hosted checkout (opens after the order + payment are created) */}
       <RazorpayCheckout
@@ -537,15 +525,12 @@ export default function CheckoutScreen() {
         onDismiss={handleRzDismiss}
         onError={handleRzError}
       />
-    </SafeAreaView>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: SPACING.lg, paddingVertical: SPACING.md },
-  backBtn: { width: 40, height: 40, justifyContent: "center" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: COLORS.black },
+  headerPad: { paddingHorizontal: SPACING.lg },
   section: { paddingHorizontal: SPACING.lg, marginBottom: SPACING.xl },
   emailNudge: {
     backgroundColor: COLORS.mintGreen,
@@ -575,10 +560,6 @@ const styles = StyleSheet.create({
   addAddressBtn: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, backgroundColor: COLORS.white, padding: SPACING.lg, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.gold, borderStyle: "dashed" },
   addAddressText: { fontSize: 14, fontWeight: "600", color: COLORS.gold },
   pillScroll: { marginBottom: SPACING.md },
-  pill: { paddingVertical: SPACING.sm, paddingHorizontal: SPACING.lg, borderRadius: RADIUS.full, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, marginRight: SPACING.sm },
-  pillActive: { backgroundColor: COLORS.gold, borderColor: COLORS.gold },
-  pillText: { fontSize: 13, fontWeight: "600", color: COLORS.text },
-  pillTextActive: { color: COLORS.white },
   slotGrid: { flexDirection: "row", flexWrap: "wrap", gap: SPACING.sm },
   slotPill: { paddingVertical: SPACING.sm, paddingHorizontal: SPACING.md, borderRadius: RADIUS.sm, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, flexDirection: "row", alignItems: "center", gap: SPACING.xs },
   slotPillActive: { backgroundColor: COLORS.forestGreen, borderColor: COLORS.forestGreen },
@@ -608,15 +589,10 @@ const styles = StyleSheet.create({
   paymentText: { fontSize: 13, fontWeight: "700", color: COLORS.forestGreen, marginTop: 6 },
   paymentSub: { fontSize: 10, color: COLORS.textMuted, marginTop: 2 },
   paymentTextActive: { color: COLORS.white },
-  summaryRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: SPACING.xs },
-  summaryLabel: { fontSize: 14, color: COLORS.textLight },
-  summaryValue: { fontSize: 14, fontWeight: "600", color: COLORS.text },
   summaryTotal: { borderTopWidth: 1, borderTopColor: COLORS.border, paddingTop: SPACING.sm, marginTop: SPACING.xs },
-  totalLabel: { fontSize: 17, fontWeight: "700", color: COLORS.black },
-  totalValue: { fontSize: 17, fontWeight: "700", color: COLORS.forestGreen },
-  bottomBar: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: COLORS.white, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg, borderTopWidth: 1, borderTopColor: COLORS.border, shadowColor: "#000", shadowOffset: { width: 0, height: -2 }, shadowOpacity: 0.1, shadowRadius: 8, elevation: 10 },
-  bottomAmount: { fontSize: 20, fontWeight: "700", color: COLORS.black },
-  bottomSub: { fontSize: 11, color: COLORS.textMuted },
+  bottomBarRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center" },
+  bottomAmount: { ...TYPE.h2, color: COLORS.black },
+  bottomSub: { ...TYPE.caption, color: COLORS.textMuted },
   // Store selection
   storeLoader: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, padding: SPACING.lg },
   storeLoaderText: { fontSize: 13, color: COLORS.textMuted },
