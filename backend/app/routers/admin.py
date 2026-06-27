@@ -293,6 +293,138 @@ async def get_admin_order_detail(order_id: str, current_user: dict = Depends(get
     }
 
 
+@router.put("/orders/{order_id}/bill")
+async def admin_edit_order_bill(order_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """Super-admin edits an existing order's BILL: line items, quantities, coupon
+    and manual discount. Recomputes subtotal / delivery fee / discount / total
+    using the SAME rules as order creation (coupon validation + capped discount).
+
+    FINANCIAL/AUDIT GUARDRAIL: orders generate a GST invoice. Invoices are issued
+    once (idempotent) and frozen — this endpoint NEVER mutates an already-issued
+    invoice. Every bill edit is recorded as an audit trail entry (before/after,
+    who, when) under order.bill_revisions and in admin_db_audit. If an invoice was
+    already issued, the order is flagged invoice_stale=true and the response warns
+    that a revised invoice must be issued (see ADMIN_AUDIT.md proposal).
+
+    Body: { items:[{service_name,item_name,price,quantity,category?}],
+            coupon_code?, discount?, special_instructions? }
+    """
+    from app.routers.orders import FREE_DELIVERY_THRESHOLD, DELIVERY_FEE
+    _require_admin(current_user)
+    db = get_db()
+    try:
+        order = await db.orders.find_one({"_id": ObjectId(order_id)})
+    except Exception:
+        order = None
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Rebuild line items from the submitted bill (super-admin supplies prices).
+    raw_items = body.get("items") or []
+    line_items = []
+    for ri in raw_items:
+        try:
+            price = round(float(ri.get("price", 0)), 2)
+            qty = int(ri.get("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        name = (ri.get("item_name") or "").strip()
+        if not name or price < 0 or qty <= 0:
+            continue
+        line_items.append({
+            "service_name": (ri.get("service_name") or "").strip() or "Service",
+            "item_name": name, "price": price, "quantity": qty,
+            "subtotal": round(price * qty, 2),
+            "category": ri.get("category", "unisex"),
+        })
+    if not line_items:
+        raise HTTPException(status_code=400, detail="A bill needs at least one valid line item")
+
+    subtotal = round(sum(li["subtotal"] for li in line_items), 2)
+    fulfillment_mode = order.get("fulfillment_mode", "counter_pickup")
+    if fulfillment_mode == "rider_delivery":
+        delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else DELIVERY_FEE
+    else:
+        delivery_fee = 0.0
+
+    # Discount: same rules as create (coupon validated against the customer +
+    # new subtotal, plus optional manual discount, combined and capped).
+    coupon_code = (body.get("coupon_code") or "").strip().upper() or None
+    coupon_discount = 0.0
+    applied_coupon = None
+    if coupon_code:
+        from app.routers.coupons import evaluate_coupon
+        ev = await evaluate_coupon(db, coupon_code, subtotal, order.get("user_id"))
+        if not ev["valid"]:
+            raise HTTPException(status_code=400, detail=ev["message"])
+        coupon_discount = ev["discount_amount"]
+        applied_coupon = ev["code"]
+    try:
+        manual_discount = max(0.0, round(float(body.get("discount") or 0.0), 2))
+    except (TypeError, ValueError):
+        manual_discount = 0.0
+    discount = round(min(coupon_discount + manual_discount, subtotal), 2)
+    wallet_applied = round(float(order.get("wallet_applied", 0)), 2)
+    total_amount = round(max(subtotal + delivery_fee - discount - wallet_applied, 0), 2)
+
+    # Has an invoice already been issued? If so it stays frozen (never mutated).
+    invoice = await db.invoices.find_one({"order_id": order_id})
+    invoice_issued = bool(invoice)
+
+    now = datetime.now(timezone.utc)
+    before = {
+        "items": order.get("items", []), "subtotal": order.get("subtotal", 0),
+        "discount": order.get("discount", 0), "coupon_code": order.get("coupon_code"),
+        "total_amount": order.get("total_amount", 0),
+    }
+    revision = {
+        "at": now, "by": current_user["user_id"],
+        "before": {"subtotal": before["subtotal"], "discount": before["discount"], "total_amount": before["total_amount"]},
+        "after": {"subtotal": subtotal, "discount": discount, "total_amount": total_amount},
+        "invoice_was_issued": invoice_issued,
+        "invoice_number": (invoice or {}).get("invoice_number"),
+        "note": body.get("note"),
+    }
+
+    set_fields = {
+        "items": line_items, "subtotal": subtotal, "delivery_fee": delivery_fee,
+        "discount": discount, "coupon_code": applied_coupon,
+        "total_amount": total_amount, "updated_at": now,
+    }
+    if "special_instructions" in body:
+        set_fields["special_instructions"] = body.get("special_instructions")
+    if invoice_issued:
+        set_fields["invoice_stale"] = True
+    await db.orders.update_one(
+        {"_id": order["_id"]},
+        {"$set": set_fields, "$push": {"bill_revisions": revision}},
+    )
+    await _audit_edit(db, current_user, "orders", order_id, before,
+                      {"subtotal": subtotal, "discount": discount, "coupon_code": applied_coupon, "total_amount": total_amount})
+
+    # Keep coupon usage honest when the applied coupon changes on edit.
+    old_coupon = order.get("coupon_code")
+    if applied_coupon != old_coupon:
+        if old_coupon:
+            await db.coupons.update_one({"code": old_coupon, "used_count": {"$gt": 0}}, {"$inc": {"used_count": -1}})
+        if applied_coupon:
+            await db.coupons.update_one({"code": applied_coupon}, {"$inc": {"used_count": 1}})
+
+    return {
+        "id": order_id, "subtotal": subtotal, "delivery_fee": delivery_fee,
+        "discount": discount, "coupon_code": applied_coupon, "coupon_discount": coupon_discount,
+        "total_amount": total_amount,
+        "invoice_issued": invoice_issued,
+        "invoice_number": (invoice or {}).get("invoice_number"),
+        "warning": (
+            f"Invoice {invoice['invoice_number']} was already issued and is frozen. "
+            "The order total changed — issue a revised invoice / credit note (see ADMIN_AUDIT.md). "
+            "This edit is recorded in the audit trail."
+        ) if invoice_issued else None,
+        "message": "Bill updated",
+    }
+
+
 @router.put("/orders/{order_id}/override-status")
 async def override_order_status(order_id: str, body: AdminOrderOverride, current_user: dict = Depends(get_current_user)):
     """Admin can force any status on an order."""
