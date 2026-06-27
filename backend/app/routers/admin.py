@@ -1351,13 +1351,23 @@ async def admin_create_coupon(body: dict, current_user: dict = Depends(get_curre
     from datetime import timedelta
     now = datetime.now(timezone.utc)
     valid_days = int(body.get("valid_days", 30))
+    coupon_type = body.get("type", "percent")  # percent | flat
+    # Max discount is an OPTIONAL cap for percent coupons; it's meaningless for
+    # flat coupons (the value IS the discount). None = no cap.
+    raw_max = body.get("max_discount")
+    max_discount = None
+    if coupon_type == "percent" and raw_max not in (None, "", 0, "0"):
+        try:
+            max_discount = float(raw_max)
+        except (TypeError, ValueError):
+            max_discount = None
     doc = {
         "code": code,
         "name": body.get("name", f"Coupon {code}"),
-        "type": body.get("type", "percent"),  # percent | flat
+        "type": coupon_type,
         "value": float(body.get("value", 10)),
         "min_order": float(body.get("min_order", 0)),
-        "max_discount": float(body.get("max_discount", 9999)),
+        "max_discount": max_discount,
         "usage_limit": int(body["usage_limit"]) if body.get("usage_limit") else None,
         "per_user_limit": int(body.get("per_user_limit", 1)),
         "used_count": 0,

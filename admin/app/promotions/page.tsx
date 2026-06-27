@@ -8,7 +8,7 @@ export default function PromotionsPage() {
   const [coupons, setCoupons] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ code: "", name: "", type: "percent", value: "", min_order: "0", max_discount: "500", usage_limit: "", valid_days: "30" });
+  const [form, setForm] = useState({ code: "", name: "", type: "percent", value: "", min_order: "0", max_discount: "", usage_limit: "", valid_days: "30" });
 
   const load = async () => {
     setLoading(true);
@@ -21,9 +21,12 @@ export default function PromotionsPage() {
   const handleCreate = async () => {
     if (!form.code || !form.value) { alert("Code and value are required"); return; }
     try {
-      await api.post("/admin/coupons", { ...form, value: parseFloat(form.value), min_order: parseFloat(form.min_order), max_discount: parseFloat(form.max_discount), usage_limit: form.usage_limit ? parseInt(form.usage_limit) : null, valid_days: parseInt(form.valid_days) });
+      // Max discount is an optional cap that only applies to percent coupons.
+      const maxDiscount = form.type === "percent" && form.max_discount.trim() !== ""
+        ? parseFloat(form.max_discount) : null;
+      await api.post("/admin/coupons", { ...form, value: parseFloat(form.value), min_order: parseFloat(form.min_order), max_discount: maxDiscount, usage_limit: form.usage_limit ? parseInt(form.usage_limit) : null, valid_days: parseInt(form.valid_days) });
       setShowForm(false);
-      setForm({ code: "", name: "", type: "percent", value: "", min_order: "0", max_discount: "500", usage_limit: "", valid_days: "30" });
+      setForm({ code: "", name: "", type: "percent", value: "", min_order: "0", max_discount: "", usage_limit: "", valid_days: "30" });
       load();
     } catch (e: any) { alert(e?.response?.data?.detail || "Failed"); }
   };
@@ -109,11 +112,18 @@ export default function PromotionsPage() {
               <input type="number" value={form.min_order} onChange={e => setForm({...form, min_order: e.target.value})}
                 className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
             </div>
-            <div>
-              <label className="text-xs font-semibold text-gray-500 block mb-1">Max Discount (₹)</label>
-              <input type="number" value={form.max_discount} onChange={e => setForm({...form, max_discount: e.target.value})}
-                className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
-            </div>
+            {form.type === "percent" ? (
+              <div>
+                <label className="text-xs font-semibold text-gray-500 block mb-1">Max Discount (₹) <span className="font-normal text-gray-400">— optional</span></label>
+                <input type="number" value={form.max_discount} onChange={e => setForm({...form, max_discount: e.target.value})}
+                  placeholder="No cap" className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+              </div>
+            ) : (
+              <div>
+                <label className="text-xs font-semibold text-gray-400 block mb-1">Max Discount (₹)</label>
+                <div className="w-full border border-gray-100 bg-gray-50 rounded-lg px-3 py-2 text-sm text-gray-400">N/A for flat</div>
+              </div>
+            )}
             <div>
               <label className="text-xs font-semibold text-gray-500 block mb-1">Usage Limit</label>
               <input type="number" value={form.usage_limit} onChange={e => setForm({...form, usage_limit: e.target.value})}
