@@ -54,13 +54,34 @@ async def get_dashboard(current_user: dict = Depends(get_current_user)):
     riders_online = await db.users.count_documents({"role": "rider", "rider_status": "online"})
     stores_open = await db.stores.count_documents({"is_open": True})
 
+    # Lifecycle status breakdown across ALL orders, in lifecycle order. Granular
+    # statuses are bucketed into the 4 named stages (+ Cancelled) so the dashboard
+    # pie and the status counts are computed from the same source and always agree.
+    status_buckets = [
+        ("placed", "Placed", ["placed", "confirmed"]),
+        ("processing", "Processing", ["at_store", "picked_up", "processing", "ready_for_delivery"]),
+        ("out_for_delivery", "Out for Delivery", ["out_for_delivery"]),
+        ("delivered", "Delivered", ["delivered"]),
+        ("cancelled", "Cancelled", ["cancelled"]),
+    ]
+    raw = await db.orders.aggregate([{"$group": {"_id": "$status", "count": {"$sum": 1}}}]).to_list(length=200)
+    raw_map = {r["_id"]: r["count"] for r in raw}
+    status_breakdown = [
+        {"key": key, "label": label, "count": sum(raw_map.get(m, 0) for m in members)}
+        for key, label, members in status_buckets
+    ]
+    mapped = {m for _, _, members in status_buckets for m in members}
+    other = sum(v for k, v in raw_map.items() if k not in mapped)
+    if other:
+        status_breakdown.append({"key": "other", "label": "Other", "count": other})
+
     return {
         "total_orders": total_orders, "orders_today": orders_today,
         "active_orders": active_orders, "total_revenue": total_revenue,
         "revenue_today": revenue_today, "platform_earnings": platform_earnings,
         "total_customers": total_customers, "total_riders": total_riders,
         "total_stores": total_stores, "riders_online": riders_online,
-        "stores_open": stores_open,
+        "stores_open": stores_open, "status_breakdown": status_breakdown,
     }
 
 

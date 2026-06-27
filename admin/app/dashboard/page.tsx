@@ -21,9 +21,18 @@ interface DashboardData {
   total_stores: number;
   riders_online: number;
   stores_open: number;
+  status_breakdown?: { key: string; label: string; count: number }[];
 }
 
-const CHART_COLORS = ["#006241", "#BFA14A", "#A8C86B", "#003D2B", "#8FB996"];
+// One color per lifecycle status, shared by the pie and the counts so they match.
+const STATUS_META: Record<string, { bar: string; fill: string }> = {
+  placed: { bar: "bg-orange-400", fill: "#FB923C" },
+  processing: { bar: "bg-amber-400", fill: "#F4B740" },
+  out_for_delivery: { bar: "bg-blue-400", fill: "#60A5FA" },
+  delivered: { bar: "bg-green-500", fill: "#22C55E" },
+  cancelled: { bar: "bg-red-400", fill: "#F87171" },
+  other: { bar: "bg-gray-400", fill: "#9CA3AF" },
+};
 
 export default function DashboardPage() {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -60,10 +69,10 @@ export default function DashboardPage() {
     );
   }
 
-  const pieData = data ? [
-    { name: "Active", value: data.active_orders },
-    { name: "Delivered", value: data.total_orders - data.active_orders },
-  ] : [];
+  // Single source for both the pie and the counts (full dataset, lifecycle order).
+  const breakdown = data?.status_breakdown ?? [];
+  const breakdownTotal = breakdown.reduce((n, s) => n + s.count, 0);
+  const pieData = breakdown.filter((s) => s.count > 0).map((s) => ({ name: s.label, value: s.count, key: s.key }));
 
   return (
     <PageLayout title="Dashboard">
@@ -94,37 +103,37 @@ export default function DashboardPage() {
         {/* Order Status Pie */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-4">Order Status Split</h3>
-          <ResponsiveContainer width="100%" height={180}>
-            <PieChart>
-              <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                {pieData.map((_, i) => <Cell key={i} fill={CHART_COLORS[i % CHART_COLORS.length]} />)}
-              </Pie>
-              <Tooltip />
-            </PieChart>
-          </ResponsiveContainer>
+          {breakdownTotal === 0 ? (
+            <div className="h-[180px] flex items-center justify-center text-sm text-gray-400">No orders yet</div>
+          ) : (
+            <ResponsiveContainer width="100%" height={180}>
+              <PieChart>
+                <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
+                  {pieData.map((entry) => <Cell key={entry.key} fill={STATUS_META[entry.key]?.fill ?? "#9CA3AF"} />)}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          )}
         </div>
 
-        {/* Status bar breakdown */}
+        {/* Status bar breakdown — same data + order as the pie */}
         <div className="lg:col-span-2 bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-4">Order Status Counts</h3>
           <div className="space-y-3">
-            {[
-              { label: "Placed (new)", count: recentOrders.filter(o => o.status === "placed").length, color: "bg-orange-400" },
-              { label: "Processing", count: recentOrders.filter(o => o.status === "processing").length, color: "bg-yellow-400" },
-              { label: "Out for Delivery", count: recentOrders.filter(o => o.status === "out_for_delivery").length, color: "bg-blue-400" },
-              { label: "Delivered", count: recentOrders.filter(o => o.status === "delivered").length, color: "bg-green-400" },
-            ].map((row) => (
-              <div key={row.label} className="flex items-center gap-3">
+            {breakdown.map((row) => (
+              <div key={row.key} className="flex items-center gap-3">
                 <span className="w-36 text-sm text-gray-600 flex-shrink-0">{row.label}</span>
                 <div className="flex-1 bg-gray-100 rounded-full h-2.5">
                   <div
-                    className={`${row.color} h-2.5 rounded-full`}
-                    style={{ width: `${Math.min((row.count / (recentOrders.length || 1)) * 100 * 3, 100)}%` }}
+                    className={`${STATUS_META[row.key]?.bar ?? "bg-gray-400"} h-2.5 rounded-full transition-all`}
+                    style={{ width: `${breakdownTotal ? (row.count / breakdownTotal) * 100 : 0}%` }}
                   />
                 </div>
-                <span className="text-sm font-semibold text-gray-700 w-6 text-right">{row.count}</span>
+                <span className="text-sm font-semibold text-gray-700 w-8 text-right">{row.count}</span>
               </div>
             ))}
+            {breakdown.length === 0 && <p className="text-sm text-gray-400">No orders yet</p>}
           </div>
         </div>
       </div>
