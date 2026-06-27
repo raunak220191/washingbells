@@ -464,8 +464,16 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
     if fulfillment_mode not in ("counter_pickup", "rider_delivery"):
         raise HTTPException(status_code=400, detail="Invalid fulfillment_mode")
     payment_method = body.get("payment_method", "cash")
-    if payment_method not in ("cash", "upi", "online"):
+    if payment_method not in ("cash", "upi", "card", "online"):
         raise HTTPException(status_code=400, detail="Invalid payment_method")
+    # Payment TIMING is independent of the instrument (method). When a caller
+    # doesn't send it, default to the legacy mapping (cash/upi/card collected
+    # now -> paid; online -> pending) so existing integrations are unaffected.
+    payment_timing = body.get("payment_timing")
+    if payment_timing not in ("pay_now", "pay_on_delivery", None):
+        raise HTTPException(status_code=400, detail="Invalid payment_timing")
+    if payment_timing is None:
+        payment_timing = "pay_now" if payment_method in ("cash", "upi", "card") else "pay_on_delivery"
 
     # Resolve the target store (admin-selected, else the single active store)
     if body.get("store_id"):
@@ -592,7 +600,8 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
             "city": store.get("city", ""),
         }
 
-    payment_status = "paid" if payment_method in ("cash", "upi") else "pending"
+    # Status follows TIMING, not the instrument: collected now -> paid, else pending.
+    payment_status = "paid" if payment_timing == "pay_now" else "pending"
     order_number = _generate_order_number()
     garment_tags = _generate_garment_tags(order_number, line_items)
     timeline = [
@@ -606,7 +615,8 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         "items": line_items, "address": address,
         "pickup_slot": slot, "delivery_slot": slot,
         "special_instructions": body.get("special_instructions"),
-        "payment_method": payment_method, "status": "at_store", "payment_status": payment_status,
+        "payment_method": payment_method, "payment_timing": payment_timing,
+        "status": "at_store", "payment_status": payment_status,
         "status_timeline": timeline,
         "garment_tags": garment_tags, "assigned_agent_id": None, "agent_info": None,
         "pickup_proof_images": [], "delivery_proof_images": [], "store_photos": [],
@@ -652,6 +662,8 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         "coupon_discount": coupon_discount,
         "total_amount": total_amount,
         "payment_status": payment_status,
+        "payment_method": payment_method,
+        "payment_timing": payment_timing,
         "fulfillment_mode": fulfillment_mode,
         "customer_id": user_id,
         "customer_name": user.get("name"),
