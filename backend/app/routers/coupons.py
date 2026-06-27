@@ -39,10 +39,56 @@ def _calculate_discount(coupon: dict, cart_total: float) -> float:
     """Calculate the actual discount amount for a coupon."""
     if coupon["type"] == "percent":
         discount = cart_total * (coupon["value"] / 100)
-        max_disc = coupon.get("max_discount", 9999)
-        return min(discount, max_disc)
+        max_disc = coupon.get("max_discount")
+        # max_discount is OPTIONAL — only cap when one is actually configured.
+        if max_disc not in (None, "", 0):
+            discount = min(discount, max_disc)
+        return discount
     else:  # flat
         return min(coupon["value"], cart_total)
+
+
+async def evaluate_coupon(db, code: str, cart_total: float, user_id: str | None) -> dict:
+    """Validate a coupon and compute its discount against ``cart_total``.
+
+    Single source of truth for coupon rules (active / expiry / not-yet-active /
+    usage-limit / per-user-limit / assigned-user / min-order). Shared by the
+    customer ``/coupons/validate`` endpoint and admin order creation so both
+    enforce identical business rules. Returns
+    ``{valid, code, coupon, discount_amount, message}``.
+    """
+    now = datetime.now(timezone.utc)
+    norm = (code or "").strip().upper()
+
+    coupon = await db.coupons.find_one({"code": norm, "active": True})
+    if not coupon:
+        return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": "Invalid coupon code"}
+
+    if _aware(coupon.get("valid_to")) and _aware(coupon["valid_to"]) < now:
+        return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": "Coupon has expired"}
+
+    if _aware(coupon.get("valid_from")) and _aware(coupon["valid_from"]) > now:
+        return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": "Coupon is not yet active"}
+
+    if coupon.get("usage_limit") and coupon.get("used_count", 0) >= coupon["usage_limit"]:
+        return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": "Coupon usage limit reached"}
+
+    if coupon.get("per_user_limit") and user_id:
+        user_uses = await db.orders.count_documents({"user_id": user_id, "coupon_code": norm})
+        if user_uses >= coupon["per_user_limit"]:
+            return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": "You have already used this coupon"}
+
+    if coupon.get("assigned_user_id") and coupon["assigned_user_id"] != user_id:
+        return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": "This coupon is not valid for this account"}
+
+    min_order = coupon.get("min_order", 0)
+    if cart_total < min_order:
+        mo = int(min_order) if float(min_order).is_integer() else min_order
+        return {"valid": False, "code": norm, "coupon": None, "discount_amount": 0, "message": f"Minimum order of ₹{mo} required"}
+
+    discount = round(_calculate_discount(coupon, cart_total), 2)
+    return {"valid": True, "code": norm, "coupon": coupon, "discount_amount": discount,
+            "message": f"₹{discount} off applied!"}
 
 
 @router.get("/me", response_model=list[CouponResponse])
@@ -82,56 +128,10 @@ async def validate_coupon(
 ):
     """Validate a coupon code against the current cart total."""
     db = get_db()
-    user_id = current_user["user_id"]
-    now = datetime.now(timezone.utc)
-
-    coupon = await db.coupons.find_one({
-        "code": body.code.upper(),
-        "active": True,
-    })
-
-    if not coupon:
-        return {"valid": False, "code": body.code, "discount_amount": 0, "message": "Invalid coupon code"}
-
-    # Check expiry (MongoDB datetimes are naive — coerce before comparing)
-    if _aware(coupon.get("valid_to")) and _aware(coupon["valid_to"]) < now:
-        return {"valid": False, "code": body.code, "discount_amount": 0, "message": "Coupon has expired"}
-
-    if _aware(coupon.get("valid_from")) and _aware(coupon["valid_from"]) > now:
-        return {"valid": False, "code": body.code, "discount_amount": 0, "message": "Coupon is not yet active"}
-
-    # Check usage limit
-    if coupon.get("usage_limit") and coupon.get("used_count", 0) >= coupon["usage_limit"]:
-        return {"valid": False, "code": body.code, "discount_amount": 0, "message": "Coupon usage limit reached"}
-
-    # Check per-user limit
-    if coupon.get("per_user_limit"):
-        user_uses = await db.orders.count_documents({
-            "user_id": user_id,
-            "coupon_code": body.code.upper(),
-        })
-        if user_uses >= coupon["per_user_limit"]:
-            return {"valid": False, "code": body.code, "discount_amount": 0, "message": "You have already used this coupon"}
-
-    # Check user-specific coupon
-    if coupon.get("assigned_user_id") and coupon["assigned_user_id"] != user_id:
-        return {"valid": False, "code": body.code, "discount_amount": 0, "message": "This coupon is not valid for your account"}
-
-    # Check minimum order
-    min_order = coupon.get("min_order", 0)
-    if body.cart_total < min_order:
-        return {
-            "valid": False,
-            "code": body.code,
-            "discount_amount": 0,
-            "message": f"Minimum order of ₹{min_order} required",
-        }
-
-    discount = _calculate_discount(coupon, body.cart_total)
-
+    result = await evaluate_coupon(db, body.code, body.cart_total, current_user["user_id"])
     return {
-        "valid": True,
-        "code": body.code.upper(),
-        "discount_amount": round(discount, 2),
-        "message": f"₹{round(discount, 2)} off applied!",
+        "valid": result["valid"],
+        "code": result["code"],
+        "discount_amount": result["discount_amount"],
+        "message": result["message"],
     }

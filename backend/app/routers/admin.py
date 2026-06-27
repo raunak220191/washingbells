@@ -521,12 +521,6 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else DELIVERY_FEE
     else:
         delivery_fee = 0.0
-    try:
-        discount = round(float(body.get("discount") or 0.0), 2)
-    except (TypeError, ValueError):
-        discount = 0.0
-    discount = max(0.0, min(discount, subtotal))
-    total_amount = round(subtotal + delivery_fee - discount, 2)
 
     now = datetime.now(timezone.utc)
 
@@ -558,6 +552,26 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
             await db.users.update_one({"_id": user["_id"]}, {"$set": updates})
             user = await db.users.find_one({"_id": user["_id"]})
     user_id = str(user["_id"])
+
+    # Discount: optional coupon (same rules as the customer flow) + optional
+    # manual admin discount. Both are computed on the subtotal and combined,
+    # capped at the subtotal so the total never goes negative.
+    coupon_code = (body.get("coupon_code") or "").strip().upper() or None
+    coupon_discount = 0.0
+    applied_coupon = None
+    if coupon_code:
+        from app.routers.coupons import evaluate_coupon
+        ev = await evaluate_coupon(db, coupon_code, subtotal, user_id)
+        if not ev["valid"]:
+            raise HTTPException(status_code=400, detail=ev["message"])
+        coupon_discount = ev["discount_amount"]
+        applied_coupon = ev["code"]
+    try:
+        manual_discount = max(0.0, round(float(body.get("discount") or 0.0), 2))
+    except (TypeError, ValueError):
+        manual_discount = 0.0
+    discount = round(min(coupon_discount + manual_discount, subtotal), 2)
+    total_amount = round(subtotal + delivery_fee - discount, 2)
 
     # Address
     if fulfillment_mode == "rider_delivery":
@@ -609,10 +623,14 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         "customer_rating": None, "customer_review": None,
         "subtotal": subtotal, "delivery_fee": delivery_fee, "discount": discount,
         "wallet_applied": 0.0, "total_amount": total_amount,
-        "coupon_code": None, "razorpay_order_id": None,
+        "coupon_code": applied_coupon, "razorpay_order_id": None,
         "created_at": now, "updated_at": now,
     }
     result = await db.orders.insert_one(order_doc)
+
+    # Mirror the customer flow: count a coupon use once the order is created.
+    if applied_coupon:
+        await db.coupons.update_one({"code": applied_coupon}, {"$inc": {"used_count": 1}})
 
     # Notify the customer (non-blocking)
     try:
@@ -630,6 +648,8 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         "subtotal": subtotal,
         "delivery_fee": delivery_fee,
         "discount": discount,
+        "coupon_code": applied_coupon,
+        "coupon_discount": coupon_discount,
         "total_amount": total_amount,
         "payment_status": payment_status,
         "fulfillment_mode": fulfillment_mode,
