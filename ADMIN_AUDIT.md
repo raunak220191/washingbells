@@ -260,3 +260,27 @@ widths; recent-orders table keeps `overflow-x-auto`; all grids stack cleanly.
   No existing role checks were changed.
 - **Invoices.** Never silently mutated; issued invoice stayed frozen across a bill
   edit; edits are audited.
+
+## Follow-up — Sidebar scroll + dashboard re-verification
+
+**Sidebar clipped on short viewports (reported).** `Sidebar.tsx` nav was `flex-1`
+with no overflow handling, so on shorter heights the lower items
+(Payouts → Platform Settings) and the Logout footer were clipped and unreachable.
+**Fix:** `overflow-y-auto min-h-0` on the `<nav>` (min-h-0 lets the flex child
+shrink so it can scroll) + a subtle dark scrollbar (`.sidebar-scroll` in
+globals.css); logo + footer stay pinned. **Verified** at 1280×650: nav scrolls
+(scrollHeight 864 > clientHeight 472) and Platform Settings + Logout are reachable.
+Before/after: `scratchpad/sidebar-before-1280x650.png`, `sidebar-after-bottom.png`.
+**Commit.** `7394ae4`
+
+**Dashboard verification (both surfaces).**
+- *Narrow viewport (iPhone-14 logical size 390×844) + 1280px desktop, Playwright:*
+  donut renders, legend matches the Order Status Counts bars exactly, stat cards
+  show real data, no overflow/cutoff, recent-orders table scrolls horizontally,
+  empty state handled. (`dash-after-desktop.png`, `dash-after-390x844`.)
+- *iOS Simulator (iPhone 14, iOS 16.4) Safari:* the admin renders correctly at
+  `localhost:3000` (login page, phone input + numeric keypad verified —
+  `scratchpad/ios-login2.png`, `ios-form4.png`). Driving the password field to reach
+  the dashboard via mobile-MCP coordinate taps was unreliable (WebView input focus
+  limitation in the tooling, not an app defect), so dashboard scroll was verified on
+  the equivalent 390×844 viewport above rather than by fighting taps (per CLAUDE.md).
