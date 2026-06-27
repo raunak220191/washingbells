@@ -1605,6 +1605,135 @@ async def admin_create_store(body: dict, current_user: dict = Depends(get_curren
 
 
 # ════════════════════════════════════════════════════════════
+# PROFILE EDITING (super-admin only) — Bug 6
+# ════════════════════════════════════════════════════════════
+
+async def _audit_edit(db, current_user, collection: str, doc_id: str, before: dict, after: dict):
+    """Record a super-admin profile/bill edit for the audit trail (best-effort)."""
+    try:
+        await db.admin_db_audit.insert_one({
+            "actor_id": current_user["user_id"], "collection": collection,
+            "action": "admin_edit", "doc_id": doc_id,
+            "before": before, "after": after,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except Exception:
+        pass
+
+
+async def _check_phone_clash(db, new_phone: str, exclude_id):
+    clash = await db.users.find_one({"phone": new_phone, "_id": {"$ne": exclude_id}})
+    if clash:
+        raise HTTPException(status_code=409, detail="Another user already has this phone")
+
+
+@router.put("/users/{user_id}")
+async def admin_update_user(user_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """Super-admin edits a customer/user profile (name, email, phone)."""
+    _require_admin(current_user)
+    db = get_db()
+    try:
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        user = None
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    updates = {}
+    if "name" in body:
+        updates["name"] = (body.get("name") or "").strip() or None
+    if "email" in body:
+        updates["email"] = (body.get("email") or "").strip().lower() or None
+    if body.get("phone"):
+        new_phone = _admin_normalize_phone(body["phone"])
+        if new_phone != user["phone"]:
+            await _check_phone_clash(db, new_phone, user["_id"])
+            updates["phone"] = new_phone
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    before = {k: user.get(k) for k in updates}
+    updates["updated_at"] = datetime.now(timezone.utc)
+    await db.users.update_one({"_id": user["_id"]}, {"$set": updates})
+    await _audit_edit(db, current_user, "users", user_id, before,
+                      {k: v for k, v in updates.items() if k != "updated_at"})
+    return {"id": user_id, "message": "User updated"}
+
+
+@router.put("/riders/{rider_id}")
+async def admin_update_rider(rider_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """Super-admin edits a rider profile (name, email, phone, vehicle, approval)."""
+    _require_admin(current_user)
+    db = get_db()
+    try:
+        rider = await db.users.find_one({"_id": ObjectId(rider_id), "role": "rider"})
+    except Exception:
+        rider = None
+    if not rider:
+        raise HTTPException(status_code=404, detail="Rider not found")
+
+    updates = {}
+    if "name" in body:
+        updates["name"] = (body.get("name") or "").strip() or None
+    if "email" in body:
+        updates["email"] = (body.get("email") or "").strip().lower() or None
+    if "vehicle_type" in body:
+        updates["vehicle_type"] = (body.get("vehicle_type") or "").strip() or None
+    if "vehicle_number" in body:
+        updates["vehicle_number"] = (body.get("vehicle_number") or "").strip() or None
+    if "rider_approved" in body:
+        updates["rider_approved"] = bool(body["rider_approved"])
+    if body.get("phone"):
+        new_phone = _admin_normalize_phone(body["phone"])
+        if new_phone != rider["phone"]:
+            await _check_phone_clash(db, new_phone, rider["_id"])
+            updates["phone"] = new_phone
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    before = {k: rider.get(k) for k in updates}
+    updates["updated_at"] = datetime.now(timezone.utc)
+    await db.users.update_one({"_id": rider["_id"]}, {"$set": updates})
+    await _audit_edit(db, current_user, "users", rider_id, before,
+                      {k: v for k, v in updates.items() if k != "updated_at"})
+    return {"id": rider_id, "message": "Rider updated"}
+
+
+@router.put("/stores/{store_id}")
+async def admin_update_store(store_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """Super-admin edits a store profile (name, address, contact, hours, geo, status)."""
+    _require_admin(current_user)
+    db = get_db()
+    try:
+        store = await db.stores.find_one({"_id": ObjectId(store_id)})
+    except Exception:
+        store = None
+    if not store:
+        raise HTTPException(status_code=404, detail="Store not found")
+
+    updates = {}
+    for f in ["name", "address", "city", "state", "pincode", "phone", "whatsapp",
+              "opening_time", "closing_time", "status"]:
+        if f in body:
+            updates[f] = body[f]
+    for f in ["latitude", "longitude", "geo_radius_km"]:
+        if body.get(f) not in (None, ""):
+            try:
+                updates[f] = float(body[f])
+            except (TypeError, ValueError):
+                pass
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+
+    before = {k: store.get(k) for k in updates}
+    updates["updated_at"] = datetime.now(timezone.utc)
+    await db.stores.update_one({"_id": store["_id"]}, {"$set": updates})
+    await _audit_edit(db, current_user, "stores", store_id, before,
+                      {k: v for k, v in updates.items() if k != "updated_at"})
+    return {"id": store_id, "message": "Store updated"}
+
+
+# ════════════════════════════════════════════════════════════
 # PLATFORM SETTINGS
 # ════════════════════════════════════════════════════════════
 
