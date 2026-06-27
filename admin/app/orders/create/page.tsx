@@ -18,9 +18,15 @@ type Line = {
   service_name: string; item_name: string;
   price: number; quantity: number;
 };
+type Coupon = {
+  id: string; code: string; name: string; type: "percent" | "flat";
+  value: number; min_order: number; max_discount: number | null;
+  usage_limit: number | null; used_count: number; valid_to: string | null; active: boolean;
+};
 type CreateResult = {
   id: string; order_number: string; total_amount: number; subtotal: number;
   delivery_fee: number; discount: number; payment_status: string;
+  coupon_code?: string | null; coupon_discount?: number;
   customer_name: string | null; customer_has_login: boolean;
   store_name: string | null; tag_count: number;
 };
@@ -50,7 +56,10 @@ export default function CreateOrderPage() {
 
   // options
   const [fulfillment, setFulfillment] = useState<"counter_pickup" | "rider_delivery">("counter_pickup");
-  const [payment, setPayment] = useState<"cash" | "upi" | "online">("cash");
+  const [payment, setPayment] = useState<"cash" | "upi" | "card" | "online">("cash");
+  const [paymentTiming, setPaymentTiming] = useState<"pay_now" | "pay_on_delivery">("pay_now");
+  const [coupons, setCoupons] = useState<Coupon[]>([]);
+  const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState("");
   const [instructions, setInstructions] = useState("");
   const [addr, setAddr] = useState({ full_address: "", city: "", latitude: "", longitude: "" });
@@ -63,6 +72,7 @@ export default function CreateOrderPage() {
   useEffect(() => {
     api.get("/admin/services").then((r) => setServices(r.data || [])).catch(() => {});
     api.get("/admin/stores").then((r) => setStores(r.data || [])).catch(() => {});
+    api.get("/admin/coupons").then((r) => setCoupons(r.data || [])).catch(() => {});
   }, []);
 
   const activeService = useMemo(() => services.find((s) => s.id === svcId), [services, svcId]);
@@ -72,7 +82,31 @@ export default function CreateOrderPage() {
     [lines],
   );
   const deliveryFee = fulfillment === "rider_delivery" && subtotal < FREE_DELIVERY_THRESHOLD ? DELIVERY_FEE : 0;
-  const discountNum = Math.max(0, Math.min(Number(discount) || 0, subtotal));
+
+  // Only offer coupons that are active, not expired, and not fully used.
+  const now = Date.now();
+  const selectableCoupons = useMemo(() => coupons.filter((c) =>
+    c.active &&
+    (!c.valid_to || new Date(c.valid_to).getTime() >= now) &&
+    (!c.usage_limit || c.used_count < c.usage_limit)
+  ), [coupons, now]);
+  const selectedCoupon = useMemo(() => selectableCoupons.find((c) => c.code === couponCode) || null, [selectableCoupons, couponCode]);
+
+  // Client-side PREVIEW of the coupon discount; the backend recomputes the
+  // authoritative amount and enforces all rules at create time.
+  const couponEligible = selectedCoupon ? subtotal >= (selectedCoupon.min_order || 0) : false;
+  const couponDiscount = useMemo(() => {
+    if (!selectedCoupon || !couponEligible) return 0;
+    if (selectedCoupon.type === "percent") {
+      const raw = subtotal * (selectedCoupon.value / 100);
+      const cap = selectedCoupon.max_discount;
+      return Math.round(cap && cap > 0 ? Math.min(raw, cap) : raw);
+    }
+    return Math.round(Math.min(selectedCoupon.value, subtotal));
+  }, [selectedCoupon, couponEligible, subtotal]);
+
+  const manualDiscount = Math.max(0, Number(discount) || 0);
+  const discountNum = Math.min(couponDiscount + manualDiscount, subtotal);
   const total = Math.max(0, Math.round(subtotal + deliveryFee - discountNum));
   const totalGarments = lines.reduce((n, l) => n + l.quantity, 0);
 
@@ -136,9 +170,11 @@ export default function CreateOrderPage() {
         items: lines.map((l) => ({ service_id: l.service_id, item_id: l.item_id, quantity: l.quantity })),
         fulfillment_mode: fulfillment,
         payment_method: payment,
+        payment_timing: paymentTiming,
         store_id: storeId || undefined,
         special_instructions: instructions || undefined,
-        discount: discountNum || undefined,
+        coupon_code: couponCode || undefined,
+        discount: manualDiscount || undefined,
       };
       if (fulfillment === "rider_delivery") {
         payload.address = {
@@ -164,7 +200,8 @@ export default function CreateOrderPage() {
   const resetAll = () => {
     setPhone(""); setName(""); setEmail(""); setPassword(""); setLookup(null);
     setLines([]); setSvcId(""); setItemId(""); setQty("1"); setStoreId("");
-    setFulfillment("counter_pickup"); setPayment("cash"); setDiscount(""); setInstructions("");
+    setFulfillment("counter_pickup"); setPayment("cash"); setPaymentTiming("pay_now");
+    setCouponCode(""); setDiscount(""); setInstructions("");
     setAddr({ full_address: "", city: "", latitude: "", longitude: "" });
     setResult(null); setError("");
   };
@@ -313,12 +350,27 @@ export default function CreateOrderPage() {
                 </select>
               </div>
               <div>
-                <Label>Payment</Label>
+                <Label>Payment method</Label>
                 <select className={inputCls} value={payment} onChange={(e) => setPayment(e.target.value as any)}>
                   <option value="cash">Cash</option>
                   <option value="upi">UPI</option>
-                  <option value="online">Online (unpaid)</option>
+                  <option value="card">Card</option>
+                  <option value="online">Online link</option>
                 </select>
+              </div>
+            </div>
+            <div className="mt-3">
+              <Label>Payment timing</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {([["pay_now", "Pay now", "Marks the order paid"],
+                   ["pay_on_delivery", "Pay on delivery", "Collected later — stays pending"]] as const).map(([val, title, sub]) => (
+                  <button key={val} type="button" onClick={() => setPaymentTiming(val)}
+                    className={`text-left rounded-lg border px-3 py-2 transition-colors ${
+                      paymentTiming === val ? "border-amber-500 bg-amber-50" : "border-gray-200 hover:bg-gray-50"}`}>
+                    <div className="text-sm font-semibold text-gray-800">{title}</div>
+                    <div className="text-[11px] text-gray-500">{sub}</div>
+                  </button>
+                ))}
               </div>
             </div>
             {fulfillment === "rider_delivery" && (
@@ -348,8 +400,30 @@ export default function CreateOrderPage() {
             </div>
             <Row label={`Subtotal (${totalGarments} garments)`} value={`₹${Math.round(subtotal)}`} />
             <Row label="Delivery fee" value={deliveryFee ? `₹${deliveryFee}` : "Free"} />
+
+            {/* Coupon */}
+            <div className="py-1.5">
+              <span className="text-sm text-gray-500">Coupon</span>
+              <select className={`${inputCls} mt-1`} value={couponCode} onChange={(e) => setCouponCode(e.target.value)}>
+                <option value="">No coupon</option>
+                {selectableCoupons.map((c) => (
+                  <option key={c.id} value={c.code}>
+                    {c.code} — {c.type === "percent" ? `${c.value}% off` : `₹${c.value} off`}
+                    {c.min_order ? ` (min ₹${c.min_order})` : ""}
+                  </option>
+                ))}
+              </select>
+              {selectedCoupon && !couponEligible && (
+                <p className="text-[11px] text-amber-600 mt-1">Min order ₹{selectedCoupon.min_order} not met — coupon won&apos;t apply.</p>
+              )}
+              {selectedCoupon && couponEligible && (
+                <p className="text-[11px] text-emerald-600 mt-1">−₹{couponDiscount} from {selectedCoupon.code}</p>
+              )}
+            </div>
+            {couponDiscount > 0 && <Row label="Coupon discount" value={`−₹${couponDiscount}`} />}
+
             <div className="flex items-center justify-between py-1.5">
-              <span className="text-sm text-gray-500">Discount ₹</span>
+              <span className="text-sm text-gray-500">Manual discount ₹</span>
               <input type="number" min={0} value={discount} onChange={(e) => setDiscount(e.target.value)}
                 placeholder="0" className="w-20 border border-gray-200 rounded-lg px-2 py-1 text-sm text-right focus:outline-none focus:border-amber-500" />
             </div>
