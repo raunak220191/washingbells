@@ -392,6 +392,46 @@ async def admin_lookup_customer(phone: str, current_user: dict = Depends(get_cur
     }
 
 
+@router.post("/customers")
+async def admin_create_customer(body: dict, current_user: dict = Depends(get_current_user)):
+    """Create a standalone customer profile WITHOUT an order.
+
+    Body: {phone (required), name?, email?, password?}. Returns 409 if a customer
+    with that phone already exists (the UI can route to edit instead). The
+    create-with-order path (`/orders/create`) still lookup-or-creates as before.
+    """
+    from app.core.security import hash_password
+    _require_admin(current_user)
+    db = get_db()
+
+    phone = _admin_normalize_phone(body.get("phone", ""))
+    name = (body.get("name") or "").strip()
+    email = (body.get("email") or "").strip().lower() or None
+    password = (body.get("password") or "").strip()
+    now = datetime.now(timezone.utc)
+
+    existing = await db.users.find_one({"phone": phone})
+    if existing:
+        raise HTTPException(status_code=409, detail="A customer with this phone already exists")
+
+    doc = {
+        "phone": phone, "name": name or "Customer", "email": email,
+        "role": "customer", "wallet_balance": 0.0,
+        "created_at": now, "updated_at": now,
+    }
+    if password:
+        doc["password_hash"] = hash_password(password)
+    res = await db.users.insert_one(doc)
+    user = await db.users.find_one({"_id": res.inserted_id})
+
+    return {
+        "id": str(user["_id"]), "phone": user["phone"],
+        "name": user.get("name"), "email": user.get("email"),
+        "role": user.get("role"), "has_login": bool(user.get("password_hash")),
+        "message": "Customer created",
+    }
+
+
 @router.post("/orders/create")
 async def admin_create_order(body: dict, current_user: dict = Depends(get_current_user)):
     """Admin creates an order on behalf of a customer (phone / counter intake).

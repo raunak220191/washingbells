@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
+import AddCustomerModal from "@/components/AddCustomerModal";
 import api from "@/lib/api";
 import {
   RefreshCw, X, Eye, Phone, Mail, MapPin, Wallet, ShoppingBag,
-  Gift, Users as UsersIcon, FileCheck, Truck, History,
+  Gift, Users as UsersIcon, FileCheck, Truck, History, UserPlus,
 } from "lucide-react";
 
 type UserRow = {
@@ -76,6 +77,7 @@ export default function CustomersPage() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
+  const [showAdd, setShowAdd] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -157,6 +159,9 @@ export default function CustomersPage() {
           <RefreshCw size={13} /> Refresh
         </button>
         <span className="ml-auto text-sm text-gray-500">{filtered.length} shown</span>
+        <button onClick={() => setShowAdd(true)} className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-400 text-white rounded-lg text-sm font-semibold transition-colors">
+          <UserPlus size={14} /> Add Customer
+        </button>
       </div>
 
       {/* Table */}
@@ -399,6 +404,12 @@ export default function CustomersPage() {
           </div>
         </div>
       )}
+
+      <AddCustomerModal
+        open={showAdd}
+        onClose={() => setShowAdd(false)}
+        onCreated={(c) => { load(); openDetail(c.id); }}
+      />
     </PageLayout>
   );
 }
