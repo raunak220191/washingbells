@@ -7,6 +7,21 @@ per CLAUDE.md. Admin app on `:3000`, FastAPI on `:8000`, Mongo in Docker
 Admin login (for API tests):
 `POST /api/v1/auth/login-password {"phone":"+919999999999","password":"Test@1234"}` → admin JWT.
 
+### Summary (all 10 reported bugs fixed + verified)
+
+| # | Bug | Commit(s) |
+|---|-----|-----------|
+| 1 | OTP fails on Android ("Verify & Continue" disabled) | `41b8c56` |
+| 2 | Standalone Add Customer (no order) | `c439a77` |
+| 3 | Coupons applicable at order time | `d538764`, `2c1da4d` |
+| 4 | Max Discount optional for percent coupons | `717f71b` |
+| 5 | Payment timing separated from method | `023d05e`, `2c1da4d` |
+| 6 | Super-admin edit user/rider/store | `0c8ac4e`, `50f28df` |
+| 7 | Dashboard status split in lifecycle order | `0614bc1` |
+| 8 | New Order quantity inputs editable | `4f1d331` |
+| 9 | Edit a created order's bill (+invoice audit) | `7ffd93a`, `69b932f` |
+| 10 | Dashboard UX polish (donut + legend) | `24e2ced` |
+
 ---
 
 ## Bug 1 — OTP fails on Android ("Verify & Continue" stays disabled / OTP not accepted)
