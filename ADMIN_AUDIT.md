@@ -119,3 +119,72 @@ totals recompute. (Verified visually + math via order-create API tests above.)
 **Commit.** `4f1d331`
 
 ---
+
+## Bug 7 — Dashboard status split in lifecycle order, pie matches counts
+
+**Root cause.** The pie showed only Active vs Delivered; the counts were computed
+from the last 10 orders only and used a different breakdown — pie and counts
+disagreed and weren't full-dataset.
+
+**Fix.** `/admin/dashboard` now returns `status_breakdown` aggregated over ALL
+orders, bucketed into lifecycle stages **in order**: Placed → Processing → Out for
+Delivery → Delivered (+ Cancelled, + Other fallback). Dashboard pie and counts both
+render from this one array with one color per status, so they always agree and
+follow the lifecycle order.
+
+**Verified (curl).** buckets sum to 33 = total_orders, ordered correctly.
+**Commit.** `0614bc1`
+
+---
+
+## Bug 6 — Super-admin edit for user / rider / store (and created order)
+
+**Root cause.** Only approve/toggle/override endpoints existed; no way to edit a
+user, rider, or store profile, or a created order.
+
+**Fix.** New super-admin-gated PUT endpoints:
+- `PUT /admin/users/{id}` (name, email, phone — 409 on phone clash)
+- `PUT /admin/riders/{id}` (name, email, phone, vehicle type/number, approval)
+- `PUT /admin/stores/{id}` (name, address, city/state/pincode, phone, hours, geo, status)
+- Created-order/bill edit: see Bug 9.
+All validate, ignore unknown fields, and write a before/after audit entry
+(`_audit_edit` → `admin_db_audit`). UI: reusable `EditEntityModal` wired into the
+Users, Riders, and Stores detail drawers via an Edit button.
+
+**Verified (curl).** user/rider/store edits persist; non-admin token → 403; phone
+clash → 409. (Seeded store/rider edited during testing were restored.)
+**Commits.** `0c8ac4e` (backend), `50f28df` (UI)
+
+---
+
+## Bug 9 — Edit a created order's bill (with invoice audit guardrail)
+
+**Root cause.** No way to edit a created order's bill (items/qty/discount), and no
+handling for the GST invoice when a bill changes.
+
+**Invoice model (surfaced).** Invoices live in `db.invoices`, issued LAZILY on
+first invoice-PDF fetch via `build_invoice_for_order`, which is **idempotent** — one
+frozen invoice per order, numbered from an atomic per-store counter. There is **no**
+existing revision mechanism and **no** bill-edit audit.
+
+**Fix.** `PUT /admin/orders/{id}/bill` recomputes subtotal/delivery/discount/total
+from the edited line items using the **same** rules as create (coupon validated
+against the customer + new subtotal, optional manual discount, combined + capped),
+and keeps coupon `used_count` honest when the coupon changes. Per the guardrail it
+**never mutates an issued invoice**: every edit is written to `order.bill_revisions`
+(before/after totals, actor, time, invoice_was_issued, invoice_number) and
+`admin_db_audit`; if an invoice was already issued the order is flagged
+`invoice_stale=true` and the response returns a warning to issue a revised
+invoice/credit note. UI: `EditBillModal` from the order drawer (add/remove items,
+edit qty/price, coupon + manual discount, live totals) — shows the warning on save.
+
+**Verified (curl + DB).** recompute 340−40=300; empty bill→400; after issuing
+INV-WB001-00002 (frozen at 300) a bill edit to 600 left the invoice **unchanged at
+300**, set `invoice_stale=true`, and logged a 300→600 revision (invoice_was_issued
+true).
+
+**PROPOSED (not built) — invoice revision handling.** See "Proposals" section below.
+
+**Commits.** `7ffd93a` (backend), `69b932f` (UI)
+
+---
