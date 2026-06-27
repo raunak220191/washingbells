@@ -2,10 +2,11 @@
 import { useEffect, useMemo, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
+import EditBillModal from "@/components/EditBillModal";
 import api from "@/lib/api";
 import {
   Search, RefreshCw, X, Printer, MapPin, Phone, Truck,
-  Tag as TagIcon, Image as ImageIcon, History, Package, Store as StoreIcon,
+  Tag as TagIcon, Image as ImageIcon, History, Package, Store as StoreIcon, Pencil,
 } from "lucide-react";
 
 const STATUSES = [
@@ -124,6 +125,7 @@ export default function OrdersPage() {
   const [overrideNote, setOverrideNote] = useState("");
   const [riders, setRiders] = useState<any[]>([]);
   const [lightbox, setLightbox] = useState<PhotoRef | null>(null);
+  const [editingBill, setEditingBill] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -417,12 +419,20 @@ export default function OrdersPage() {
                     {detail.wallet_applied > 0 && <div className="flex justify-between text-purple-700"><span>Wallet</span><span>−₹{detail.wallet_applied?.toFixed(0)}</span></div>}
                     <div className="flex justify-between font-bold text-gray-900 pt-1 border-t border-gray-200"><span>Total</span><span>₹{detail.total_amount?.toFixed(0)}</span></div>
                   </div>
-                  <button
-                    onClick={handleViewInvoice}
-                    className="mt-3 w-full flex items-center justify-center gap-1.5 bg-green-600 text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
-                  >
-                    <Printer size={13} /> GST Invoice (PDF)
-                  </button>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <button
+                      onClick={() => setEditingBill(true)}
+                      className="flex items-center justify-center gap-1.5 bg-amber-100 text-amber-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-amber-200 transition-colors"
+                    >
+                      <Pencil size={13} /> Edit Bill
+                    </button>
+                    <button
+                      onClick={handleViewInvoice}
+                      className="flex items-center justify-center gap-1.5 bg-green-600 text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                    >
+                      <Printer size={13} /> GST Invoice
+                    </button>
+                  </div>
                 </div>
 
                 {/* Garment Tags */}
@@ -571,6 +581,20 @@ export default function OrdersPage() {
       )}
 
       <PhotoLightbox photo={lightbox} onClose={() => setLightbox(null)} />
+
+      {editingBill && detail && (
+        <EditBillModal
+          key={detail.id}
+          orderId={detail.id}
+          initialItems={(detail.items || []).map((it) => ({
+            service_name: it.service_name, item_name: it.item_name, price: it.price, quantity: it.quantity,
+          }))}
+          initialDiscount={detail.discount || 0}
+          initialCoupon={detail.coupon_code}
+          onClose={() => setEditingBill(false)}
+          onSaved={() => { if (selectedId) openDetail(selectedId); load(); }}
+        />
+      )}
     </PageLayout>
   );
 }
