@@ -45,7 +45,7 @@ export default function CreateOrderPage() {
   const [storeId, setStoreId] = useState("");
   const [svcId, setSvcId] = useState("");
   const [itemId, setItemId] = useState("");
-  const [qty, setQty] = useState(1);
+  const [qty, setQty] = useState("1"); // string so the field can be cleared while typing
   const [lines, setLines] = useState<Line[]>([]);
 
   // options
@@ -89,27 +89,33 @@ export default function CreateOrderPage() {
   };
 
   const addLine = () => {
-    if (!activeService || !itemId || qty < 1) return;
+    const q = Math.max(1, parseInt(qty, 10) || 1);
+    if (!activeService || !itemId) return;
     const it = activeService.items.find((i) => i.id === itemId);
     if (!it) return;
     setLines((prev) => {
       const existing = prev.find((l) => l.service_id === svcId && l.item_id === itemId);
       if (existing) {
         return prev.map((l) =>
-          l.service_id === svcId && l.item_id === itemId ? { ...l, quantity: l.quantity + qty } : l,
+          l.service_id === svcId && l.item_id === itemId ? { ...l, quantity: l.quantity + q } : l,
         );
       }
       return [...prev, {
         service_id: svcId, item_id: itemId,
         service_name: activeService.name, item_name: it.name,
-        price: it.price, quantity: qty,
+        price: it.price, quantity: q,
       }];
     });
-    setItemId(""); setQty(1);
+    setItemId(""); setQty("1");
   };
 
-  const setLineQty = (i: number, q: number) =>
-    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, quantity: Math.max(1, q) } : l)));
+  // Accept the raw input so the field can be emptied mid-edit; 0 means "being
+  // cleared" and renders blank. clampLineQty (onBlur) restores a minimum of 1.
+  const setLineQty = (i: number, raw: string) =>
+    setLines((prev) => prev.map((l, idx) =>
+      idx === i ? { ...l, quantity: raw === "" ? 0 : Math.max(0, Math.floor(Number(raw) || 0)) } : l));
+  const clampLineQty = (i: number) =>
+    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, quantity: Math.max(1, l.quantity) } : l)));
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i));
 
   const submit = async () => {
@@ -157,7 +163,7 @@ export default function CreateOrderPage() {
 
   const resetAll = () => {
     setPhone(""); setName(""); setEmail(""); setPassword(""); setLookup(null);
-    setLines([]); setSvcId(""); setItemId(""); setQty(1); setStoreId("");
+    setLines([]); setSvcId(""); setItemId(""); setQty("1"); setStoreId("");
     setFulfillment("counter_pickup"); setPayment("cash"); setDiscount(""); setInstructions("");
     setAddr({ full_address: "", city: "", latitude: "", longitude: "" });
     setResult(null); setError("");
@@ -255,7 +261,8 @@ export default function CreateOrderPage() {
                 ))}
               </select>
               <input type="number" min={1} className={inputCls} value={qty}
-                onChange={(e) => setQty(Math.max(1, Number(e.target.value)))} />
+                onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
+                onBlur={() => setQty((q) => String(Math.max(1, parseInt(q, 10) || 1)))} />
               <button onClick={addLine} disabled={!itemId}
                 className="inline-flex items-center justify-center gap-1 bg-amber-500 text-forest px-3 rounded-lg text-sm font-semibold hover:bg-amber-400 disabled:opacity-40">
                 <Plus size={15} /> Add
@@ -272,8 +279,9 @@ export default function CreateOrderPage() {
                       <div className="text-[11px] text-gray-400 uppercase">{l.service_name}</div>
                       <div className="text-sm text-gray-800 truncate">{l.item_name} · ₹{l.price}</div>
                     </div>
-                    <input type="number" min={1} value={l.quantity}
-                      onChange={(e) => setLineQty(i, Number(e.target.value))}
+                    <input type="number" min={1} value={l.quantity === 0 ? "" : l.quantity}
+                      onChange={(e) => setLineQty(i, e.target.value)}
+                      onBlur={() => clampLineQty(i)}
                       className="w-14 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:border-amber-500" />
                     <div className="w-16 text-right text-sm font-semibold text-gray-700">₹{Math.round(l.price * l.quantity)}</div>
                     <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
