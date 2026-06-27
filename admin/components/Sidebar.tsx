@@ -84,8 +84,10 @@ export default function Sidebar() {
         </div>
       </div>
 
-      {/* Navigation */}
-      <nav className="flex-1 px-3 py-4 space-y-1">
+      {/* Navigation — scrolls when items exceed the viewport height so nothing
+          is clipped/unreachable; logo + footer stay pinned. min-h-0 lets this
+          flex child shrink below its content height so overflow can scroll. */}
+      <nav className="flex-1 min-h-0 overflow-y-auto px-3 py-4 space-y-1 sidebar-scroll">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = href === "/orders" ? pathname === "/orders" : pathname.startsWith(href);
           const badge = href === "/notifications" ? unreadCount
