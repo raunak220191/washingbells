@@ -36,12 +36,35 @@ export default function OTPVerifyScreen() {
   }, [resendTimer]);
 
   const handleChange = (text, index) => {
+    const digits = (text || "").replace(/\D/g, "");
+
+    // Android Gboard/Samsung SMS-autofill (and paste) deliver the WHOLE code
+    // into a single box. With maxLength={1} only the first digit survived, so
+    // the button stayed disabled. Distribute multi-char input across the boxes.
+    if (digits.length > 1) {
+      const next = [...code];
+      let cursor = index;
+      for (const ch of digits) {
+        if (cursor >= OTP_LENGTH) break;
+        next[cursor] = ch;
+        cursor += 1;
+      }
+      setCode(next);
+      const lastFilled = Math.min(index + digits.length, OTP_LENGTH) - 1;
+      if (lastFilled >= OTP_LENGTH - 1) {
+        inputs.current[OTP_LENGTH - 1]?.blur();
+      } else {
+        inputs.current[lastFilled + 1]?.focus();
+      }
+      return;
+    }
+
     const newCode = [...code];
-    newCode[index] = text;
+    newCode[index] = digits;
     setCode(newCode);
 
     // Auto-advance to next input
-    if (text && index < OTP_LENGTH - 1) {
+    if (digits && index < OTP_LENGTH - 1) {
       inputs.current[index + 1]?.focus();
     }
   };
@@ -111,11 +134,16 @@ export default function OTPVerifyScreen() {
               ref={(ref) => (inputs.current[i] = ref)}
               style={[styles.otpInput, digit ? styles.otpInputFilled : null]}
               keyboardType="number-pad"
-              maxLength={1}
+              // Allow more than 1 char so autofill/paste lands intact and is
+              // then distributed across boxes by handleChange (Android fix).
+              maxLength={i === 0 ? OTP_LENGTH : 1}
               value={digit}
               onChangeText={(text) => handleChange(text, i)}
               onKeyPress={(e) => handleKeyPress(e, i)}
               autoFocus={i === 0}
+              textContentType="oneTimeCode"
+              autoComplete={i === 0 ? "sms-otp" : "off"}
+              importantForAutofill={i === 0 ? "yes" : "no"}
             />
           ))}
         </View>

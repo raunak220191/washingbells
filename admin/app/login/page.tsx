@@ -152,6 +152,8 @@ function LoginForm() {
                 <label className="text-xs font-semibold text-gray-400 uppercase tracking-wide block mb-2">OTP Code</label>
                 <input
                   type="tel"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
                   maxLength={6}
                   placeholder="123456"
                   value={otp}
