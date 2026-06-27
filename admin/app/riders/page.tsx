@@ -2,10 +2,11 @@
 import { useEffect, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
+import EditEntityModal from "@/components/EditEntityModal";
 import api from "@/lib/api";
 import {
   CheckCircle, XCircle, RefreshCw, MapPin, FileText,
-  Phone, Truck, Plus, X, Eye, Clock, TrendingUp,
+  Phone, Truck, Plus, X, Eye, Clock, TrendingUp, Pencil,
 } from "lucide-react";
 
 type Rider = {
@@ -60,6 +61,7 @@ export default function RidersPage() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [addForm, setAddForm] = useState({ name: "", phone: "", vehicle_type: "bike", vehicle_number: "" });
   const [addLoading, setAddLoading] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -246,7 +248,15 @@ export default function RidersPage() {
           <div className="w-[480px] bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-bold text-gray-900">Rider Details</h2>
-              <button onClick={() => setSelectedRider(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              <div className="flex items-center gap-2">
+                {selectedRider && (
+                  <button onClick={() => setEditing(true)}
+                    className="flex items-center gap-1.5 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-semibold">
+                    <Pencil size={12} /> Edit
+                  </button>
+                )}
+                <button onClick={() => setSelectedRider(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              </div>
             </div>
 
             {detailLoading ? (
@@ -394,6 +404,36 @@ export default function RidersPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Edit Rider Modal ── */}
+      {editing && selectedRider && (
+        <EditEntityModal
+          key={selectedRider.id}
+          title="Edit Rider"
+          endpoint={`/admin/riders/${selectedRider.id}`}
+          fields={[
+            { key: "name", label: "Name", colSpan: 2 },
+            { key: "phone", label: "Phone", type: "tel" },
+            { key: "email", label: "Email", type: "email" },
+            { key: "vehicle_type", label: "Vehicle type", type: "select",
+              options: [
+                { value: "bike", label: "Bike" },
+                { value: "scooter", label: "Scooter" },
+                { value: "cycle", label: "Cycle" },
+                { value: "car", label: "Car" },
+              ] },
+            { key: "vehicle_number", label: "Vehicle number" },
+          ]}
+          initial={{
+            name: selectedRider.name ?? "", phone: selectedRider.phone ?? "",
+            email: selectedRider.email ?? "",
+            vehicle_type: selectedRider.vehicle_type ?? "bike",
+            vehicle_number: selectedRider.vehicle_number ?? "",
+          }}
+          onClose={() => setEditing(false)}
+          onSaved={() => { openDetail(selectedRider.id); load(); }}
+        />
       )}
 
       {/* ── Add Rider Modal ── */}

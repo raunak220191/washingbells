@@ -2,10 +2,11 @@
 import { useEffect, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
+import EditEntityModal from "@/components/EditEntityModal";
 import api from "@/lib/api";
 import {
   CheckCircle, XCircle, RefreshCw, MapPin, Phone,
-  Plus, X, Eye, ToggleLeft, ToggleRight, ShoppingBag, Clock,
+  Plus, X, Eye, ToggleLeft, ToggleRight, ShoppingBag, Clock, Pencil,
 } from "lucide-react";
 
 type Store = {
@@ -55,6 +56,7 @@ export default function StoresPage() {
   const [storeOrders, setStoreOrders] = useState<StoreOrder[]>([]);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [editing, setEditing] = useState(false);
   const [addForm, setAddForm] = useState({
     name: "", owner_phone: "", owner_name: "", address: "",
     city: "Ludhiana", pincode: "", store_phone: "",
@@ -269,7 +271,15 @@ export default function StoresPage() {
           <div className="w-[500px] bg-white h-full overflow-y-auto shadow-2xl flex flex-col">
             <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-bold text-gray-900">Store Details</h2>
-              <button onClick={() => setSelectedStore(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              <div className="flex items-center gap-2">
+                {selectedStore && (
+                  <button onClick={() => setEditing(true)}
+                    className="flex items-center gap-1.5 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-semibold">
+                    <Pencil size={12} /> Edit
+                  </button>
+                )}
+                <button onClick={() => setSelectedStore(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              </div>
             </div>
 
             {detailLoading ? (
@@ -406,6 +416,42 @@ export default function StoresPage() {
             )}
           </div>
         </div>
+      )}
+
+      {/* ── Edit Store Modal ── */}
+      {editing && selectedStore && (
+        <EditEntityModal
+          key={selectedStore.id}
+          title="Edit Store"
+          endpoint={`/admin/stores/${selectedStore.id}`}
+          fields={[
+            { key: "name", label: "Store name", colSpan: 2 },
+            { key: "address", label: "Address", colSpan: 2 },
+            { key: "city", label: "City" },
+            { key: "state", label: "State" },
+            { key: "pincode", label: "Pincode" },
+            { key: "phone", label: "Phone", type: "tel" },
+            { key: "opening_time", label: "Opening time" },
+            { key: "closing_time", label: "Closing time" },
+            { key: "geo_radius_km", label: "Service radius (km)" },
+            { key: "status", label: "Status", type: "select",
+              options: [
+                { value: "active", label: "Active" },
+                { value: "inactive", label: "Inactive" },
+                { value: "suspended", label: "Suspended" },
+              ] },
+          ]}
+          initial={{
+            name: selectedStore.name ?? "", address: selectedStore.address ?? "",
+            city: selectedStore.city ?? "", state: selectedStore.state ?? "",
+            pincode: selectedStore.pincode ?? "", phone: selectedStore.phone ?? "",
+            opening_time: selectedStore.opening_time ?? "", closing_time: selectedStore.closing_time ?? "",
+            geo_radius_km: String(selectedStore.geo_radius_km ?? ""),
+            status: selectedStore.status ?? "active",
+          }}
+          onClose={() => setEditing(false)}
+          onSaved={() => { openDetail(selectedStore.id); load(); }}
+        />
       )}
 
       {/* ── Add Store Modal ── */}

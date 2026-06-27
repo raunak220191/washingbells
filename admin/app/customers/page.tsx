@@ -3,10 +3,11 @@ import { useEffect, useMemo, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
 import AddCustomerModal from "@/components/AddCustomerModal";
+import EditEntityModal from "@/components/EditEntityModal";
 import api from "@/lib/api";
 import {
   RefreshCw, X, Eye, Phone, Mail, MapPin, Wallet, ShoppingBag,
-  Gift, Users as UsersIcon, FileCheck, Truck, History, UserPlus,
+  Gift, Users as UsersIcon, FileCheck, Truck, History, UserPlus, Pencil,
 } from "lucide-react";
 
 type UserRow = {
@@ -78,6 +79,7 @@ export default function CustomersPage() {
   const [detail, setDetail] = useState<UserDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
+  const [editing, setEditing] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -217,7 +219,15 @@ export default function CustomersPage() {
                 <h2 className="text-lg font-bold text-gray-900">{detail?.name || "User Details"}</h2>
                 {detail && <div className="flex gap-2 mt-1"><Badge value={detail.role} /></div>}
               </div>
-              <button onClick={() => setSelectedId(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              <div className="flex items-center gap-2">
+                {detail && (
+                  <button onClick={() => setEditing(true)}
+                    className="flex items-center gap-1.5 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-semibold">
+                    <Pencil size={12} /> Edit
+                  </button>
+                )}
+                <button onClick={() => setSelectedId(null)} className="p-1.5 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+              </div>
             </div>
 
             {detailLoading || !detail ? (
@@ -410,6 +420,22 @@ export default function CustomersPage() {
         onClose={() => setShowAdd(false)}
         onCreated={(c) => { load(); openDetail(c.id); }}
       />
+
+      {editing && detail && (
+        <EditEntityModal
+          key={detail.id}
+          title="Edit Profile"
+          endpoint={`/admin/users/${detail.id}`}
+          fields={[
+            { key: "name", label: "Name", colSpan: 2 },
+            { key: "phone", label: "Phone", type: "tel" },
+            { key: "email", label: "Email", type: "email" },
+          ]}
+          initial={{ name: detail.name ?? "", phone: detail.phone ?? "", email: detail.email ?? "" }}
+          onClose={() => setEditing(false)}
+          onSaved={() => { openDetail(detail.id); load(); }}
+        />
+      )}
     </PageLayout>
   );
 }
