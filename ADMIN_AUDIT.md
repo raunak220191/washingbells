@@ -284,3 +284,32 @@ Before/after: `scratchpad/sidebar-before-1280x650.png`, `sidebar-after-bottom.pn
   the dashboard via mobile-MCP coordinate taps was unreliable (WebView input focus
   limitation in the tooling, not an app defect), so dashboard scroll was verified on
   the equivalent 390×844 viewport above rather than by fighting taps (per CLAUDE.md).
+
+## Deployment (2026-06-27)
+
+**Git.** `admin-fixes` fast-forward-merged into `main` (main was a strict ancestor;
+now identical). Deploys sourced from this tree. (Not pushed to origin yet.)
+
+**GCP Cloud Run (project `washingbells-prod`, asia-south1) — DONE & verified.**
+- `washingbells-api` → rev **00006-5bd** (`gcloud run deploy --source backend`,
+  env/secrets preserved). Verified: `/health` 200; `/admin/dashboard` returns
+  `status_breakdown` (Bug 7); `POST /admin/customers` 400 on bad phone (Bug 2).
+- `washingbells-admin` → rev **00006-6mw** (`--source admin`). Verified:
+  admin.washingbells.com/login 200; prod dashboard renders the new donut+legend
+  (Bug 7/10), real stat cards, full sidebar (`scratchpad/prod-dashboard.png`).
+
+**⚠ Prod OTP provider gap (must fix before real launch).** Code uses Twilio but
+prod `washingbells-api` has only stale MSG91 secret/env and no `TWILIO_*` → OTP
+falls to dev-bypass `123456`. Acceptable for the current pre-launch/dummy-data
+prod; set `TWILIO_*` secrets to enable real SMS. (No app crash — pydantic ignores
+the extra MSG91 env.)
+
+**Mobile — customer app only (the only app with code changes: the OTP fix).**
+- **iOS:** `eas build -p ios --profile production --auto-submit --no-wait` queued on
+  EAS → builds then auto-submits to **TestFlight** (ascAppId 6783028568). App Store
+  *production* release still needs a manual "Submit for review" in App Store Connect.
+- **Android:** BLOCKED — EAS Free-plan Android build quota exhausted this month
+  (resets Jul 1, 2026). Rebuild + `eas submit` (→ Play **internal** track) after the
+  reset or on a paid plan. Note: Play *production* is independently gated (new
+  personal account → 14-day closed test).
+- Rider/store apps unchanged this round → not rebuilt.
