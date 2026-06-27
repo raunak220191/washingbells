@@ -188,3 +188,60 @@ true).
 **Commits.** `7ffd93a` (backend), `69b932f` (UI)
 
 ---
+
+## Bug 10 — Dashboard UX polish (presentation only)
+
+**Before/after.** Captured at 1280px and 390px (Playwright) — see
+`scratchpad/dash-before-*.png` / `dash-after-*.png`.
+
+**Root cause.** The pie used outside labels in a narrow 1/3 column, so labels
+clipped ("ing: 14", "Placed:", "Cance", "r Delivery: 1"). Pie also didn't visually
+reconcile with the counts.
+
+**Fix (no business logic).** Pie → donut with the total order count centered, plus
+a clean legend (color dot · label · count · %) that never clips and uses the same
+per-status colors as the Order Status Counts bars, so the two panels match exactly.
+Empty state ("No orders yet") retained. Verified responsive at desktop and narrow
+widths; recent-orders table keeps `overflow-x-auto`; all grids stack cleanly.
+**Commit.** `24e2ced`
+
+---
+
+## Operator conveniences (additive)
+
+- **Search/filter — already present, verified.** Orders page: free-text search
+  (order #, customer name, phone) + server-side status filter. Customers/Users page:
+  search (name/phone/email/referral) + role filter. No change needed.
+- **Loading/empty states — present.** Dashboard, orders, customers, riders, stores
+  all render explicit loading and empty rows; dashboard pie has an empty state.
+- **Add Customer** (Bug 2) and **profile/bill editing** (Bugs 6, 9) are the main new
+  operator tools added this run.
+
+## Proposals (NOT built — flagged per guardrails)
+
+1. **Invoice revision handling (financial/GST — from Bug 9).** Today an issued
+   invoice is frozen and a bill edit only records an audit trail + `invoice_stale`
+   flag. Compliant next step: on a post-issue bill edit, issue a **revised tax
+   invoice** (new number e.g. `…-R1`, header "REVISED INVOICE — supersedes <orig>",
+   original marked `superseded_by`) for upward changes, or a **credit note** for
+   downward changes, via `billing_service` + `invoice_pdf_service` + a revision
+   counter. Left as a proposal to avoid silently changing GST/financial behavior.
+2. **Bulk status update (touches order state).** A multi-select on the Orders table
+   that calls the existing `override-status` per selected order (which already
+   handles the delivered→payout math). Proposed rather than built because it changes
+   order state at scale; should ship with a confirmation + per-order result summary
+   and likely a dedicated audited bulk endpoint.
+3. **Sidebar responsiveness (global).** `PageLayout` uses a fixed `ml-64` sidebar on
+   all pages; on very narrow widths it eats horizontal space. A collapsible/drawer
+   sidebar would help but is a shared-layout change beyond the dashboard scope.
+
+## Guardrail check (verified via API)
+
+- **Order totals.** Created orders compute `subtotal − discount (+delivery)`
+  correctly; coupons applied per shared `evaluate_coupon` rules; coupon + manual
+  discount combine and cap at subtotal. (Bugs 3/4/5/9 curl tests above.)
+- **Payments.** `payment_status` derives from `payment_timing`, not the instrument.
+- **Roles.** All new edit/bill endpoints are `_require_admin`; non-admin → 403.
+  No existing role checks were changed.
+- **Invoices.** Never silently mutated; issued invoice stayed frozen across a bill
+  edit; edits are audited.
