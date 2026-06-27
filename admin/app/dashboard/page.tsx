@@ -7,7 +7,7 @@ import {
   IndianRupee, Activity, CheckCircle,
 } from "lucide-react";
 import api from "@/lib/api";
-import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 
 interface DashboardData {
   total_orders: number;
@@ -100,20 +100,38 @@ export default function DashboardPage() {
 
       {/* Charts Row */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
-        {/* Order Status Pie */}
+        {/* Order Status Pie — donut + legend (labels never clip) */}
         <div className="bg-white rounded-xl border border-gray-200 p-5 shadow-sm">
           <h3 className="font-semibold text-gray-900 mb-4">Order Status Split</h3>
           {breakdownTotal === 0 ? (
-            <div className="h-[180px] flex items-center justify-center text-sm text-gray-400">No orders yet</div>
+            <div className="h-[200px] flex items-center justify-center text-sm text-gray-400">No orders yet</div>
           ) : (
-            <ResponsiveContainer width="100%" height={180}>
-              <PieChart>
-                <Pie data={pieData} cx="50%" cy="50%" outerRadius={70} dataKey="value" label={({ name, value }) => `${name}: ${value}`}>
-                  {pieData.map((entry) => <Cell key={entry.key} fill={STATUS_META[entry.key]?.fill ?? "#9CA3AF"} />)}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <>
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={48} outerRadius={72} paddingAngle={2} dataKey="value">
+                      {pieData.map((entry) => <Cell key={entry.key} fill={STATUS_META[entry.key]?.fill ?? "#9CA3AF"} />)}
+                    </Pie>
+                    <Tooltip formatter={(v: any, n: any) => [`${v} (${Math.round((Number(v) / breakdownTotal) * 100)}%)`, n]} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-2xl font-extrabold text-gray-900 leading-none">{breakdownTotal}</span>
+                  <span className="text-[11px] text-gray-400 uppercase tracking-wide">orders</span>
+                </div>
+              </div>
+              <div className="mt-4 space-y-1.5">
+                {breakdown.filter((s) => s.count > 0).map((s) => (
+                  <div key={s.key} className="flex items-center gap-2 text-sm">
+                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ background: STATUS_META[s.key]?.fill ?? "#9CA3AF" }} />
+                    <span className="text-gray-600 flex-1 truncate">{s.label}</span>
+                    <span className="font-semibold text-gray-800">{s.count}</span>
+                    <span className="text-gray-400 w-9 text-right">{Math.round((s.count / breakdownTotal) * 100)}%</span>
+                  </div>
+                ))}
+              </div>
+            </>
           )}
         </div>
 
