@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Plus, Trash2, Receipt } from "lucide-react";
 import api from "@/lib/api";
 
-type Line = { service_name: string; item_name: string; price: number; quantity: number };
+type Line = { service_name: string; item_name: string; price: number; quantity: number; unit?: string };
 type Coupon = { id: string; code: string; type: "percent" | "flat"; value: number; min_order: number; max_discount: number | null; usage_limit: number | null; used_count: number; valid_to: string | null; active: boolean };
 
 type Props = {
@@ -46,7 +46,7 @@ export default function EditBillModal({ orderId, initialItems, initialDiscount, 
   const total = Math.max(0, Math.round(subtotal - discount));
 
   const save = async () => {
-    const items = lines.filter((l) => l.item_name.trim() && Number(l.quantity) > 0).map((l) => ({ service_name: l.service_name, item_name: l.item_name, price: Number(l.price) || 0, quantity: Number(l.quantity) || 0 }));
+    const items = lines.filter((l) => l.item_name.trim() && Number(l.quantity) > 0).map((l) => ({ service_name: l.service_name, item_name: l.item_name, price: Number(l.price) || 0, quantity: Number(l.quantity) || 0, unit: l.unit || "piece" }));
     if (items.length === 0) { setError("A bill needs at least one item"); return; }
     setSaving(true); setError("");
     try {
@@ -71,7 +71,17 @@ export default function EditBillModal({ orderId, initialItems, initialDiscount, 
             <div key={i} className="grid grid-cols-[1fr_70px_56px_auto] gap-2 items-center">
               <input className={cls} placeholder="Item name" value={l.item_name} onChange={(e) => setLine(i, { item_name: e.target.value })} />
               <input className={`${cls} text-right`} type="number" min={0} placeholder="₹" value={l.price} onChange={(e) => setLine(i, { price: Number(e.target.value) })} />
-              <input className={`${cls} text-center`} type="number" min={1} value={l.quantity} onChange={(e) => setLine(i, { quantity: e.target.value === "" ? 0 : Math.max(0, Math.floor(Number(e.target.value))) })} onBlur={() => setLine(i, { quantity: Math.max(1, l.quantity) })} />
+              <div className="relative">
+                <input className={`${cls} w-full text-center ${l.unit === "kg" ? "pr-6" : ""}`} type="number"
+                  min={l.unit === "kg" ? 0.1 : 1} step={l.unit === "kg" ? 0.1 : 1} value={l.quantity}
+                  onChange={(e) => {
+                    const raw = e.target.value;
+                    const n = raw === "" ? 0 : Math.max(0, Number(raw) || 0);
+                    setLine(i, { quantity: l.unit === "kg" ? n : Math.floor(n) });
+                  }}
+                  onBlur={() => setLine(i, { quantity: l.unit === "kg" ? Math.max(0.1, l.quantity) : Math.max(1, l.quantity) })} />
+                {l.unit === "kg" && <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-gray-400">kg</span>}
+              </div>
               <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
             </div>
           ))}

@@ -13,6 +13,17 @@ export default function ServicesPage() {
   const [services, setServices] = useState<any[]>([]);
   const [expanded, setExpanded] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  // Item search across all services — matching services auto-expand
+  const q = search.trim().toLowerCase();
+  const visibleServices = q
+    ? services
+        .map(s => (s.name.toLowerCase().includes(q)
+          ? s
+          : { ...s, items: s.items.filter((i: any) => i.name.toLowerCase().includes(q) || (i.category || "").toLowerCase().includes(q)) }))
+        .filter(s => s.items.length > 0 || s.name.toLowerCase().includes(q))
+    : services;
 
   // New service form
   const [showNewSvc, setShowNewSvc] = useState(false);
@@ -95,8 +106,14 @@ export default function ServicesPage() {
 
   return (
     <PageLayout title="Services & Pricing">
-      <div className="flex justify-between items-center mb-5">
-        <p className="text-sm text-gray-500">{services.length} service categories · Edit prices live</p>
+      <div className="flex justify-between items-center gap-3 mb-5">
+        <p className="text-sm text-gray-500 shrink-0">{services.length} service categories · Edit prices live</p>
+        <input
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          placeholder="Search items or categories…"
+          className="flex-1 max-w-sm border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500"
+        />
         <div className="flex gap-2">
           <button onClick={load} className="flex items-center gap-1.5 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors">
             <RefreshCw size={13} />
@@ -160,7 +177,10 @@ export default function ServicesPage() {
         <div className="text-center py-16 text-gray-400">Loading services...</div>
       ) : (
         <div className="space-y-3">
-          {services.map(svc => (
+          {q && visibleServices.length === 0 && (
+            <div className="text-center py-10 text-gray-400 text-sm">No items match “{search}”.</div>
+          )}
+          {visibleServices.map(svc => (
             <div key={svc.id} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
               {/* Service Header */}
               {editSvc?.id === svc.id ? (
@@ -204,7 +224,7 @@ export default function ServicesPage() {
                   }}
                 >
                   <div className="flex items-center gap-3">
-                    {expanded === svc.id ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
+                    {(q ? true : expanded === svc.id) ? <ChevronDown size={16} className="text-gray-400" /> : <ChevronRight size={16} className="text-gray-400" />}
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-semibold text-gray-900">{svc.name}</span>
@@ -226,8 +246,8 @@ export default function ServicesPage() {
                 </div>
               )}
 
-              {/* Items (expanded) */}
-              {expanded === svc.id && (
+              {/* Items (expanded — searches auto-expand) */}
+              {(q ? true : expanded === svc.id) && (
                 <div className="border-t border-gray-100">
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">

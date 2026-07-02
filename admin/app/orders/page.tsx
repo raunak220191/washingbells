@@ -406,7 +406,9 @@ export default function OrdersPage() {
                       <div key={i} className="flex justify-between py-2 text-sm">
                         <div>
                           <div className="text-xs text-gray-400 uppercase">{item.service_name}</div>
-                          <div className="text-gray-800">{item.item_name} × {item.quantity}</div>
+                          <div className="text-gray-800">
+                            {item.item_name} × {item.quantity}{(item as any).unit === "kg" ? " kg" : ""}
+                          </div>
                         </div>
                         <div className="font-semibold text-gray-700">₹{item.subtotal?.toFixed(0)}</div>
                       </div>
@@ -588,6 +590,7 @@ export default function OrdersPage() {
           orderId={detail.id}
           initialItems={(detail.items || []).map((it) => ({
             service_name: it.service_name, item_name: it.item_name, price: it.price, quantity: it.quantity,
+            unit: (it as any).unit || "piece",
           }))}
           initialDiscount={detail.discount || 0}
           initialCoupon={detail.coupon_code}
