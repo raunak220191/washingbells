@@ -1,0 +1,29 @@
+# EAS archive scope for RIDER builds.
+# The repo-root .easignore excludes rider/ (it scopes CUSTOMER builds), so rider
+# builds must swap this file in as .easignore first — see AUDIT_2026-07-03.md.
+# Root-level customer-app dirs are anchored with a leading slash so the same
+# names inside rider/ (app/, assets/, …) are NOT excluded.
+/admin/
+/backend/
+/store/
+/website/
+/logos/
+/app/
+/components/
+/lib/
+/stores/
+/constants/
+/config/
+/scripts/
+/assets/
+/android/
+/docs/
+/dist/
+node_modules/
+.expo/
+web-build/
+*.bak
+*.log
+.DS_Store
+play-service-account.json
+*.p8

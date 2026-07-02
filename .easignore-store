@@ -1,0 +1,27 @@
+# EAS archive scope for STORE builds.
+# The repo-root .easignore excludes store/ (it scopes CUSTOMER builds), so store
+# builds must swap this file in as .easignore first — see AUDIT_2026-07-03.md.
+/admin/
+/backend/
+/rider/
+/website/
+/logos/
+/app/
+/components/
+/lib/
+/stores/
+/constants/
+/config/
+/scripts/
+/assets/
+/android/
+/docs/
+/dist/
+node_modules/
+.expo/
+web-build/
+*.bak
+*.log
+.DS_Store
+play-service-account.json
+*.p8
