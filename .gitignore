@@ -57,3 +57,7 @@ play-service-account.json
 
 # Claude local settings (machine-specific paths)
 .claude/settings.local.json
+
+# Local-only credential/test notes (kept on disk, never committed)
+TEST_CREDENTIALS.md
+TEST_INFO.md
