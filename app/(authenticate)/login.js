@@ -19,6 +19,7 @@ import Screen from "../../components/common/Screen";
 export default function LoginScreen() {
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
   const sendOTP = useAuthStore((s) => s.sendOTP);
@@ -112,24 +113,36 @@ export default function LoginScreen() {
           />
         </View>
 
-        {/* Password */}
-        <TextInput
-          style={styles.passwordInput}
-          placeholder="Password"
-          placeholderTextColor={COLORS.textMuted}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
+        {/* Password (only in password mode) */}
+        {usePassword && (
+          <TextInput
+            style={styles.passwordInput}
+            placeholder="Password"
+            placeholderTextColor={COLORS.textMuted}
+            secureTextEntry
+            value={password}
+            onChangeText={setPassword}
+          />
+        )}
 
-        {/* Primary: password login (OTP bypass) */}
-        <Button
-          title="Login with Password"
-          onPress={handlePasswordLogin}
-          loading={loading}
-          disabled={phone.replace(/\s/g, "").length !== 10 || !password}
-          style={{ marginTop: SPACING.xl }}
-        />
+        {/* Primary action: OTP by default, password when toggled */}
+        {usePassword ? (
+          <Button
+            title="Login with Password"
+            onPress={handlePasswordLogin}
+            loading={loading}
+            disabled={phone.replace(/\s/g, "").length !== 10 || !password}
+            style={{ marginTop: SPACING.xl }}
+          />
+        ) : (
+          <Button
+            title="Send OTP"
+            onPress={handleSendOTP}
+            loading={loading}
+            disabled={phone.replace(/\s/g, "").length !== 10}
+            style={{ marginTop: SPACING.xl }}
+          />
+        )}
 
         {/* Divider */}
         <View style={styles.dividerRow}>
@@ -138,13 +151,15 @@ export default function LoginScreen() {
           <View style={styles.dividerLine} />
         </View>
 
-        {/* Secondary: OTP login */}
+        {/* Secondary: switch login method */}
         <TouchableOpacity
-          onPress={handleSendOTP}
-          disabled={phone.replace(/\s/g, "").length !== 10 || loading}
+          onPress={() => setUsePassword((v) => !v)}
+          disabled={loading}
           style={styles.otpBtn}
         >
-          <Text style={styles.otpBtnText}>Get OTP instead</Text>
+          <Text style={styles.otpBtnText}>
+            {usePassword ? "Login with OTP instead" : "Login with password instead"}
+          </Text>
         </TouchableOpacity>
 
         {/* Terms */}
