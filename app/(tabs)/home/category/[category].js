@@ -18,6 +18,7 @@ import Screen from "../../../../components/common/Screen";
 import Header from "../../../../components/common/Header";
 import BottomBar from "../../../../components/common/BottomBar";
 import api from "../../../../lib/api";
+import { matches } from "../../../../constants/categories";
 import { categoryLabel } from "../../../../constants/categories";
 
 export default function CategoryScreen() {
@@ -40,7 +41,9 @@ export default function CategoryScreen() {
       const flat = [];
       for (const svc of services) {
         for (const item of svc.items || []) {
-          if ((item.category || "unisex") === category) {
+          // Shared semantics: apparel categories (Men/Women/Kids) include
+          // unisex items, same as the service-screen filter chips.
+          if (matches(item.category, category)) {
             flat.push({
               key: `${svc.id}:${item.id}`,
               service_id: svc.id,

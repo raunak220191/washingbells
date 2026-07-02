@@ -17,7 +17,7 @@ import StatusBadge from "../../../components/common/StatusBadge";
 
 export default function OrdersScreen() {
   const router = useRouter();
-  const { orders, isLoading, fetchOrders } = useOrderStore();
+  const { orders, isLoading, fetchError, fetchOrders } = useOrderStore();
 
   useEffect(() => {
     fetchOrders();
@@ -48,11 +48,22 @@ export default function OrdersScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>My Orders</Text>
         </View>
-        <View style={styles.emptyState}>
-          <Ionicons name="clipboard-outline" size={ICON.hero} color={COLORS.mintGreen} />
-          <Text style={styles.emptyTitle}>No orders yet</Text>
-          <Text style={styles.emptySub}>Your order history will appear here</Text>
-        </View>
+        {fetchError ? (
+          <View style={styles.emptyState}>
+            <Ionicons name="cloud-offline-outline" size={ICON.hero} color={COLORS.mintGreen} />
+            <Text style={styles.emptyTitle}>Couldn't load orders</Text>
+            <Text style={styles.emptySub}>Check your connection and try again</Text>
+            <TouchableOpacity onPress={fetchOrders} style={styles.retryBtn}>
+              <Text style={styles.retryText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={styles.emptyState}>
+            <Ionicons name="clipboard-outline" size={ICON.hero} color={COLORS.mintGreen} />
+            <Text style={styles.emptyTitle}>No orders yet</Text>
+            <Text style={styles.emptySub}>Your order history will appear here</Text>
+          </View>
+        )}
       </Screen>
     );
   }
@@ -120,6 +131,18 @@ const styles = StyleSheet.create({
     color: COLORS.textMuted,
     textAlign: "center",
     marginTop: SPACING.sm,
+  },
+  retryBtn: {
+    marginTop: SPACING.xl,
+    paddingVertical: SPACING.md,
+    paddingHorizontal: SPACING.xxl,
+    borderRadius: 24,
+    backgroundColor: COLORS.forestGreen,
+  },
+  retryText: {
+    ...TYPE.body,
+    color: COLORS.white,
+    fontWeight: "700",
   },
   listContent: {
     paddingHorizontal: SPACING.lg,

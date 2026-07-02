@@ -11,6 +11,7 @@ import HomeHeader from "../../../components/home/HomeHeader";
 import LocationBar from "../../../components/home/LocationBar";
 import PromoBanner from "../../../components/home/PromoBanner";
 import ServiceGrid from "../../../components/home/ServiceGrid";
+import CategoryRow from "../../../components/home/CategoryRow";
 import ReferEarn from "../../../components/home/ReferEarn";
 import Testimonials from "../../../components/home/Testimonials";
 
@@ -71,8 +72,9 @@ export default function HomeScreen() {
           onProfilePress={() => router.push("/(tabs)/profile")}
         />
         <PromoBanner banners={banners} onBannerPress={handleBannerPress} onOrderNow={() => {}} />
-        <ReferEarn />
         <ServiceGrid onServicePress={handleServicePress} />
+        <CategoryRow onCategoryPress={(key) => router.push(`/(tabs)/home/category/${key}`)} />
+        <ReferEarn />
         <Testimonials testimonials={testimonials} />
         <View style={{ height: 40 }} />
       </ScrollView>

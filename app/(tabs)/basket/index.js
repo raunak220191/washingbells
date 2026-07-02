@@ -82,7 +82,9 @@ export default function BasketScreen() {
               <View style={styles.itemInfo}>
                 <Text style={styles.serviceBadge}>{item.service_name}</Text>
                 <Text style={styles.itemName}>{item.item_name}</Text>
-                <Text style={styles.itemPrice}>₹{item.price} each</Text>
+                <Text style={styles.itemPrice}>
+                  ₹{item.price}{item.unit === "kg" ? "/kg" : " each"}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => removeItem(item.service_id, item.item_id)}

@@ -189,7 +189,7 @@ export default function OrderDetailScreen() {
           <Text style={styles.sectionTitle}>Items</Text>
           {order.items?.map((item, i) => (
             <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.item_name} <Text style={styles.itemQty}>x{item.quantity}</Text></Text>
+              <Text style={styles.itemName}>{item.item_name} <Text style={styles.itemQty}>x{item.quantity}{item.unit === "kg" ? " kg" : ""}</Text></Text>
               <Text style={styles.itemPrice}>₹{item.subtotal.toFixed(2)}</Text>
             </View>
           ))}

@@ -6,15 +6,18 @@ export const useOrderStore = create((set, get) => ({
   orders: [],
   currentOrder: null,
   isLoading: false,
+  // Set when the last fetch failed, so screens can show "retry" instead of a
+  // misleading "No orders yet" empty state.
+  fetchError: false,
 
   // Fetch all orders
   fetchOrders: async () => {
     try {
       set({ isLoading: true });
       const response = await api.get("/orders");
-      set({ orders: response.data, isLoading: false });
+      set({ orders: response.data, isLoading: false, fetchError: false });
     } catch (error) {
-      set({ isLoading: false });
+      set({ isLoading: false, fetchError: true });
       console.log("Fetch orders error:", error.message);
     }
   },

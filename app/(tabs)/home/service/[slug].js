@@ -137,7 +137,10 @@ export default function ServiceDetailScreen() {
             <View style={styles.itemCard}>
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemPrice}>₹{item.price}</Text>
+                <Text style={styles.itemPrice}>
+                  ₹{item.price}
+                  {service?.pricing_unit === "kg" ? "/kg" : service?.pricing_unit === "pair" ? "/pair" : ""}
+                </Text>
               </View>
 
               {qty === 0 ? (
