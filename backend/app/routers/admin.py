@@ -1304,26 +1304,6 @@ async def get_store_orders(store_id: str, limit: int = 20, current_user: dict = 
     return result
 
 
-# ── Create Admin User ────────────────────────────────────────
-
-@router.post("/seed-admin")
-async def seed_admin():
-    """DEV ONLY: Create an admin user. Call once."""
-    db = get_db()
-    existing = await db.users.find_one({"role": "admin"})
-    if existing:
-        return {"message": "Admin already exists", "phone": existing["phone"], "id": str(existing["_id"])}
-    now = datetime.now(timezone.utc)
-    admin_doc = {
-        "phone": "+910000000000", "name": "Super Admin",
-        "email": "admin@washingbells.in", "role": "admin",
-        "created_at": now, "updated_at": now,
-    }
-    result = await db.users.insert_one(admin_doc)
-    return {"message": "Admin user created", "phone": "+910000000000", "id": str(result.inserted_id),
-            "note": "Login with +910000000000 and OTP 123456"}
-
-
 # ════════════════════════════════════════════════════════════
 # SERVICES & PRICING MANAGEMENT
 # ════════════════════════════════════════════════════════════

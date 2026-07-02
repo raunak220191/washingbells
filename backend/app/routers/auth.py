@@ -18,6 +18,11 @@ from app.core.config import get_settings
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
+# OTP abuse guards (per phone, backed by the otp_requests collection which has
+# a 1h TTL index ensured on startup): a resend cooldown and an hourly cap.
+OTP_RESEND_COOLDOWN_SECONDS = 25
+OTP_MAX_PER_HOUR = 6
+
 
 def _token_payload(user: dict) -> dict:
     return {
@@ -26,9 +31,31 @@ def _token_payload(user: dict) -> dict:
     }
 
 
+async def _check_otp_rate_limit(db, phone: str):
+    now = datetime.now(timezone.utc)
+    last = await db.otp_requests.find_one({"phone": phone}, sort=[("created_at", -1)])
+    if last:
+        last_at = last["created_at"]
+        if last_at.tzinfo is None:
+            last_at = last_at.replace(tzinfo=timezone.utc)
+        if (now - last_at).total_seconds() < OTP_RESEND_COOLDOWN_SECONDS:
+            raise HTTPException(
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                detail="Please wait a few seconds before requesting another OTP.",
+            )
+    hourly = await db.otp_requests.count_documents({"phone": phone})
+    if hourly >= OTP_MAX_PER_HOUR:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many OTP requests. Please try again later.",
+        )
+    await db.otp_requests.insert_one({"phone": phone, "created_at": now})
+
+
 @router.post("/send-otp")
 async def send_otp_endpoint(request: SendOTPRequest):
     """Send OTP to phone number for login/signup."""
+    await _check_otp_rate_limit(get_db(), request.phone)
     success = await send_otp(request.phone)
     if not success:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to send OTP.")

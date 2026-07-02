@@ -54,6 +54,9 @@ async def lifespan(app: FastAPI):
         # Billing: one invoice per order; payouts recent-first per store
         await db.invoices.create_index("order_id", unique=True)
         await db.payouts.create_index([("store_id", 1), ("created_at", -1)])
+        # OTP rate-limit window — requests expire after 1 hour
+        await db.otp_requests.create_index("created_at", expireAfterSeconds=60 * 60)
+        await db.otp_requests.create_index([("phone", 1), ("created_at", -1)])
         print("[startup] DB indexes ensured")
     except Exception as e:
         print(f"[startup] Index ensure skipped: {e}")
@@ -69,10 +72,20 @@ app = FastAPI(
     redirect_slashes=True,  # Default — keeps trailing-slash redirect
 )
 
-# CORS — allow mobile app requests
+# CORS — browser callers are the admin console and marketing site only; the
+# mobile apps are not subject to CORS. Localhost entries cover local dev.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Restrict in production
+    allow_origins=[
+        "https://admin.washingbells.com",
+        "https://washingbells.com",
+        "https://www.washingbells.com",
+        "http://localhost:3000",
+        "http://localhost:3001",
+        "http://localhost:8081",
+        "http://localhost:19006",
+    ],
+    allow_origin_regex=r"http://192\.168\.\d{1,3}\.\d{1,3}:(3000|8081|19006)",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

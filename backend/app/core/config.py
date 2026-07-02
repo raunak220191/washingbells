@@ -15,9 +15,14 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440         # 24 hours
     REFRESH_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 30  # 30 days (persistent login)
 
+    # OTP dev bypass — when True AND Twilio is not configured, OTP is the static
+    # code 123456. Must be set EXPLICITLY (env OTP_DEV_BYPASS=true); without it,
+    # missing Twilio credentials mean OTP login fails closed instead of silently
+    # accepting a universal code.
+    OTP_DEV_BYPASS: bool = False
+
     # Twilio Verify — SMS & OTP provider (server-side only; never shipped to apps).
-    # Set via .env or dev.yaml (twilio: section). Leave the Verify credentials
-    # empty to use the dev bypass (OTP is always 123456).
+    # Set via .env or dev.yaml (twilio: section).
     TWILIO_ACCOUNT_SID: str = ""                              # ACxxxxxxxx
     TWILIO_AUTH_TOKEN: str = ""                               # Twilio auth token
     TWILIO_VERIFY_SERVICE_SID: str = ""                       # VAxxxxxxxx (Verify service)

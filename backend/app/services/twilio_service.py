@@ -64,8 +64,11 @@ def _to_e164(phone: str) -> str:
 async def send_otp(phone: str) -> bool:
     """Start a Twilio Verify verification (SMS channel), or use the dev bypass."""
     if not _is_configured():
-        logger.info(f"[DEV BYPASS] OTP for {phone} → use code: {DEV_OTP}")
-        return True
+        if settings.OTP_DEV_BYPASS:
+            logger.info(f"[DEV BYPASS] OTP for {phone} → use code: {DEV_OTP}")
+            return True
+        logger.error("OTP requested but Twilio is not configured and OTP_DEV_BYPASS is off")
+        return False
 
     to = _to_e164(phone)
     try:
@@ -89,7 +92,7 @@ async def send_otp(phone: str) -> bool:
 async def verify_otp(phone: str, code: str) -> bool:
     """Check an OTP via Twilio Verify VerificationCheck, or use the dev bypass."""
     if not _is_configured():
-        return code == DEV_OTP
+        return settings.OTP_DEV_BYPASS and code == DEV_OTP
 
     to = _to_e164(phone)
     try:

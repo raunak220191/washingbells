@@ -72,8 +72,11 @@ async def create_razorpay_order(amount_paise: int, receipt: str) -> dict | None:
 async def verify_razorpay_payment(order_id: str, payment_id: str, signature: str) -> bool:
     """Verify a Razorpay payment signature: HMAC_SHA256(order_id|payment_id, secret)."""
     if not _is_configured():
-        # Dev bypass — accept when no keys are configured.
-        return True
+        # Only accept mock orders created by our own dev bypass — never real ones.
+        accept = bool(order_id and order_id.startswith("order_dev_"))
+        if not accept:
+            logger.error("Payment verify rejected: Razorpay not configured and order is not a dev mock")
+        return accept
 
     if not (order_id and payment_id and signature):
         return False
