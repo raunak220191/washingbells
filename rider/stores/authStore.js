@@ -37,17 +37,20 @@ export const useAuthStore = create((set, get) => ({
 
   verifyOTP: async (phone, code) => {
     const res = await api.post("/auth/verify-otp", { phone, code });
-    const { access_token, user } = res.data;
+    const { access_token, refresh_token, user } = res.data;
     await SecureStore.setItemAsync("rider_auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("rider_refresh_token", refresh_token);
     set({ user, token: access_token, isAuthenticated: true });
+    registerForPushNotifications().catch(() => {});
     return res.data;
   },
 
   // Log in with phone + password (OTP bypass)
   loginWithPassword: async (phone, password) => {
     const res = await api.post("/auth/login-password", { phone, password });
-    const { access_token, user } = res.data;
+    const { access_token, refresh_token, user } = res.data;
     await SecureStore.setItemAsync("rider_auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("rider_refresh_token", refresh_token);
     set({ token: access_token, isAuthenticated: true });
     // Load full rider profile so registration/approval gates resolve correctly
     try {
@@ -115,6 +118,7 @@ export const useAuthStore = create((set, get) => ({
     await stopBackgroundTracking().catch(() => {});
     await unregisterPushNotifications().catch(() => {});
     await SecureStore.deleteItemAsync("rider_auth_token").catch(() => {});
+    await SecureStore.deleteItemAsync("rider_refresh_token").catch(() => {});
     set({ user: null, token: null, isAuthenticated: false, needsTerms: false, termsChecked: false });
   },
 }));

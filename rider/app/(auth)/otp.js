@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View, Text, TextInput, StyleSheet, TouchableOpacity,
   Alert, ActivityIndicator, KeyboardAvoidingView, Platform,
@@ -12,9 +12,26 @@ import { useAuthStore } from "../../stores/authStore";
 export default function OTPScreen() {
   const router = useRouter();
   const { phone } = useLocalSearchParams();
-  const { verifyOTP } = useAuthStore();
+  const { verifyOTP, sendOTP } = useAuthStore();
   const [otp, setOtp] = useState("");
   const [loading, setLoading] = useState(false);
+  const [resendIn, setResendIn] = useState(30);
+
+  useEffect(() => {
+    if (resendIn <= 0) return;
+    const t = setTimeout(() => setResendIn((s) => s - 1), 1000);
+    return () => clearTimeout(t);
+  }, [resendIn]);
+
+  const handleResend = async () => {
+    try {
+      await sendOTP(phone);
+      setResendIn(30);
+      setOtp("");
+    } catch (e) {
+      Alert.alert("Error", e?.response?.data?.detail || "Failed to resend OTP. Try again.");
+    }
+  };
 
   const handleVerify = async () => {
     if (otp.length < 4) { Alert.alert("Invalid OTP", "Please enter the 4-6 digit OTP."); return; }
@@ -46,7 +63,7 @@ export default function OTPScreen() {
         <Text style={styles.subtitle}>
           OTP sent to <Text style={styles.phone}>{phone}</Text>
         </Text>
-        <Text style={styles.devHint}>DEV: Use OTP 123456</Text>
+        {__DEV__ && <Text style={styles.devHint}>DEV: Use OTP 123456</Text>}
 
         <TextInput
           style={styles.otpInput}
@@ -67,6 +84,14 @@ export default function OTPScreen() {
         >
           {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnText}>Verify & Continue</Text>}
         </TouchableOpacity>
+
+        {resendIn > 0 ? (
+          <Text style={styles.resendWait}>Resend OTP in {resendIn}s</Text>
+        ) : (
+          <TouchableOpacity onPress={handleResend} disabled={loading} style={styles.resendBtn}>
+            <Text style={styles.resendText}>Resend OTP</Text>
+          </TouchableOpacity>
+        )}
       </KeyboardAvoidingView>
     </SafeAreaView>
   );
@@ -89,4 +114,7 @@ const styles = StyleSheet.create({
   btn: { backgroundColor: COLORS.forestGreen, paddingVertical: SPACING.lg, borderRadius: RADIUS.full, alignItems: "center" },
   btnDisabled: { opacity: 0.5 },
   btnText: { color: COLORS.white, fontSize: 16, fontWeight: "700" },
+  resendWait: { textAlign: "center", color: COLORS.textMuted, fontSize: 13, marginTop: SPACING.xl },
+  resendBtn: { alignItems: "center", paddingVertical: SPACING.md, marginTop: SPACING.lg },
+  resendText: { color: COLORS.forestGreen, fontSize: 15, fontWeight: "600" },
 });

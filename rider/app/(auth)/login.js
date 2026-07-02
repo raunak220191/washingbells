@@ -14,6 +14,7 @@ export default function LoginScreen() {
   const { sendOTP, loginWithPassword } = useAuthStore();
   const [phone, setPhone] = useState("");
   const [password, setPassword] = useState("");
+  const [usePassword, setUsePassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -84,43 +85,59 @@ export default function LoginScreen() {
             />
           </View>
 
-          <Text style={styles.label}>Password</Text>
-          <View style={styles.passwordRow}>
-            <TextInput
-              style={styles.passwordField}
-              placeholder="Enter your password"
-              placeholderTextColor={COLORS.textMuted}
-              secureTextEntry={!showPassword}
-              value={password}
-              onChangeText={setPassword}
-              autoCapitalize="none"
-              autoCorrect={false}
-              onSubmitEditing={handlePasswordLogin}
-              returnKeyType="go"
-            />
-            <TouchableOpacity
-              style={styles.eyeBtn}
-              onPress={() => setShowPassword((v) => !v)}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textMuted} />
-            </TouchableOpacity>
-          </View>
+          {usePassword && (
+            <>
+              <Text style={styles.label}>Password</Text>
+              <View style={styles.passwordRow}>
+                <TextInput
+                  style={styles.passwordField}
+                  placeholder="Enter your password"
+                  placeholderTextColor={COLORS.textMuted}
+                  secureTextEntry={!showPassword}
+                  value={password}
+                  onChangeText={setPassword}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                  onSubmitEditing={handlePasswordLogin}
+                  returnKeyType="go"
+                />
+                <TouchableOpacity
+                  style={styles.eyeBtn}
+                  onPress={() => setShowPassword((v) => !v)}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <Ionicons name={showPassword ? "eye-off-outline" : "eye-outline"} size={20} color={COLORS.textMuted} />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
 
-          <TouchableOpacity
-            style={[styles.btn, (phone.length < 10 || !password || loading) && styles.btnDisabled]}
-            onPress={handlePasswordLogin}
-            disabled={phone.length < 10 || !password || loading}
-          >
-            {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnText}>Login with Password</Text>}
-          </TouchableOpacity>
+          {usePassword ? (
+            <TouchableOpacity
+              style={[styles.btn, (phone.length < 10 || !password || loading) && styles.btnDisabled]}
+              onPress={handlePasswordLogin}
+              disabled={phone.length < 10 || !password || loading}
+            >
+              {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnText}>Login with Password</Text>}
+            </TouchableOpacity>
+          ) : (
+            <TouchableOpacity
+              style={[styles.btn, (phone.length < 10 || loading) && styles.btnDisabled]}
+              onPress={handleSendOTP}
+              disabled={phone.length < 10 || loading}
+            >
+              {loading ? <ActivityIndicator color={COLORS.white} /> : <Text style={styles.btnText}>Send OTP</Text>}
+            </TouchableOpacity>
+          )}
 
           <TouchableOpacity
             style={styles.otpBtn}
-            onPress={handleSendOTP}
-            disabled={phone.length < 10 || loading}
+            onPress={() => setUsePassword((v) => !v)}
+            disabled={loading}
           >
-            <Text style={styles.otpBtnText}>Get OTP instead</Text>
+            <Text style={styles.otpBtnText}>
+              {usePassword ? "Login with OTP instead" : "Login with password instead"}
+            </Text>
           </TouchableOpacity>
 
           <Text style={styles.hint}>
