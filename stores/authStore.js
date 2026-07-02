@@ -78,6 +78,7 @@ export const useAuthStore = create((set, get) => ({
       isAuthenticated: true,
       isNewUser: is_new_user,
     });
+    registerForPushNotifications().catch(() => {});
 
     return response.data;
   },
