@@ -135,11 +135,6 @@ function LoginForm() {
               >
                 {loading ? "Sending..." : "Get OTP instead"}
               </button>
-              <div className="mt-4 p-3 bg-gray-700 rounded-lg">
-                <p className="text-xs text-gray-400 text-center">
-                  <span className="font-semibold text-amber-400">DEV:</span> Password login active · admin <code className="text-amber-300">+919999999999</code> / <code className="text-amber-300">Test@1234</code>
-                </p>
-              </div>
             </>
           ) : (
             <>
