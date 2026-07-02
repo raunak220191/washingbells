@@ -34,17 +34,20 @@ export const useAuthStore = create((set, get) => ({
 
   verifyOTP: async (phone, code) => {
     const res = await api.post("/auth/verify-otp", { phone, code });
-    const { access_token, user } = res.data;
+    const { access_token, refresh_token, user } = res.data;
     await SecureStore.setItemAsync("store_auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("store_refresh_token", refresh_token);
     set({ user, token: access_token, isAuthenticated: true });
+    registerForPushNotifications().catch(() => {});
     return res.data;
   },
 
   // Log in with phone + password (OTP bypass)
   loginWithPassword: async (phone, password) => {
     const res = await api.post("/auth/login-password", { phone, password });
-    const { access_token, user } = res.data;
+    const { access_token, refresh_token, user } = res.data;
     await SecureStore.setItemAsync("store_auth_token", access_token);
+    if (refresh_token) await SecureStore.setItemAsync("store_refresh_token", refresh_token);
     set({ user, token: access_token, isAuthenticated: true });
     // Load store profile so profile-completion gates resolve correctly
     try {
