@@ -13,6 +13,12 @@ dist/
 .expo/
 web-build/
 
+# Untracked native scratch from local `expo run:android` — uploading it flips
+# EAS into a (broken) bare build; excluded so EAS prebuilds managed-workflow
+# native code like rider/store. (Gradle failed with "No variants exist".)
+/android/
+/ios/
+
 # Misc
 docs/
 *.bak
