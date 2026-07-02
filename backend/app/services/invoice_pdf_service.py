@@ -134,8 +134,15 @@ def render_invoice_pdf(inv: dict) -> bytes:
         c.setFillColorRGB(0, 0, 0)
         c.setFont("Helvetica", 8)
         c.drawString(col_cat, y, str(it.get("category", "unisex")).title())
-        c.drawRightString(col_qty + 8 * mm, y, str(it.get("quantity", 1)))
-        c.drawRightString(col_rate + 12 * mm, y, _rupee(it.get("price", 0)))
+        qty = it.get("quantity", 1)
+        if it.get("unit") == "kg":
+            qty_label = f"{qty:g} kg"
+            rate_label = f"{_rupee(it.get('price', 0))}/kg"
+        else:
+            qty_label = f"{int(qty)}" if float(qty) == int(qty) else f"{qty:g}"
+            rate_label = _rupee(it.get("price", 0))
+        c.drawRightString(col_qty + 8 * mm, y, qty_label)
+        c.drawRightString(col_rate + 12 * mm, y, rate_label)
         c.drawRightString(col_amt - 1 * mm, y, _rupee(it.get("subtotal", 0)))
         y -= 8 * mm
         c.setStrokeColorRGB(0.93, 0.93, 0.93)

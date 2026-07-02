@@ -55,7 +55,9 @@ def _pick_nearest_store(stores, lat, lng):
 def _generate_garment_tags(order_number, items):
     tags, counter = [], 1
     for item in items:
-        for _ in range(item.get("quantity", 1)):
+        # Weight-priced lines (kg) get ONE tag — it's a bag, not N garments.
+        n = 1 if item.get("unit") == "kg" else max(1, int(item.get("quantity", 1)))
+        for _ in range(n):
             tags.append({"tag_code": f"{order_number}-{counter:03d}", "item_name": item["item_name"], "service_name": item["service_name"], "status": "tagged"})
             counter += 1
     return tags
@@ -77,7 +79,7 @@ async def _calc_coupon_discount(db, code, subtotal, user_id):
     return min(c["value"], subtotal)
 
 def _format_order(order):
-    items = [{"service_name": i["service_name"], "item_name": i["item_name"], "price": i["price"], "quantity": i["quantity"], "subtotal": i["subtotal"], "category": i.get("category", "unisex")} for i in order.get("items", [])]
+    items = [{"service_name": i["service_name"], "item_name": i["item_name"], "price": i["price"], "quantity": i["quantity"], "subtotal": i["subtotal"], "category": i.get("category", "unisex"), "unit": i.get("unit", "piece")} for i in order.get("items", [])]
     return OrderResponse(
         id=str(order["_id"]), order_number=order["order_number"], user_id=order["user_id"],
         items=items, address=order["address"], pickup_slot=order["pickup_slot"],

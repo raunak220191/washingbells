@@ -837,8 +837,7 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
     for ri in raw_items:
         sid = ri.get("service_id")
         item_id = ri.get("item_id")
-        qty = int(ri.get("quantity", 0) or 0)
-        if not sid or not item_id or qty <= 0:
+        if not sid or not item_id:
             continue
         if sid not in service_cache:
             try:
@@ -851,12 +850,24 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
         matched = next((it for it in svc.get("items", []) if str(it.get("_id", "")) == item_id), None)
         if not matched:
             continue
+        # kg-priced services accept fractional quantities (weight)
+        unit = svc.get("pricing_unit", "piece")
+        try:
+            if unit == "kg":
+                qty = round(float(ri.get("quantity", 0) or 0), 3)
+            else:
+                qty = int(ri.get("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
         price = float(matched["price"])
         line_items.append({
             "service_name": svc["name"],
             "item_name": matched["name"],
             "price": price,
             "quantity": qty,
+            "unit": unit,
             "subtotal": round(price * qty, 2),
             "category": matched.get("category", "unisex"),
         })
@@ -887,17 +898,23 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
         await db.users.update_one({"_id": user["_id"]}, {"$set": {"name": name, "updated_at": now}})
     user_id = str(user["_id"])
 
-    # Address
+    # Address — coordinates optional; riders navigate by the address text, so
+    # missing coords just fall back to the store's location.
     if fulfillment_mode == "rider_delivery":
         addr = body.get("address") or {}
-        if not addr.get("full_address") or addr.get("latitude") is None or addr.get("longitude") is None:
-            raise HTTPException(status_code=400, detail="Delivery address with location is required for rider delivery")
+        if not addr.get("full_address"):
+            raise HTTPException(status_code=400, detail="Delivery address is required for rider delivery")
+        try:
+            lat = float(addr["latitude"]) if addr.get("latitude") not in (None, "") else store.get("latitude")
+            lng = float(addr["longitude"]) if addr.get("longitude") not in (None, "") else store.get("longitude")
+        except (TypeError, ValueError):
+            lat, lng = store.get("latitude"), store.get("longitude")
         address = {
             "id": None,
             "label": addr.get("label", "Delivery"),
             "full_address": addr["full_address"],
-            "latitude": float(addr["latitude"]),
-            "longitude": float(addr["longitude"]),
+            "latitude": lat,
+            "longitude": lng,
             "city": addr.get("city", store.get("city", "")),
         }
     else:

@@ -5,6 +5,18 @@ from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 from app.core.database import get_db
 from app.core.security import get_current_user
+from app.core.categories import ITEM_CATEGORIES
+
+# Canonical item sort (category rank, then name) — mirrors services.py so the
+# admin console sees the same order as the apps.
+_CATEGORY_RANK = {c: i for i, c in enumerate(ITEM_CATEGORIES)}
+
+
+def _sorted_items(items):
+    return sorted(items, key=lambda i: (
+        _CATEGORY_RANK.get(i.get("category", "unisex"), len(ITEM_CATEGORIES)),
+        (i.get("name") or "").lower(),
+    ))
 from app.schemas.phase2_schemas import (
     AdminOrderOverride, AdminAssignStoreRequest,
     AdminAssignRiderRequest, ApprovalRequest,
@@ -323,9 +335,11 @@ async def admin_edit_order_bill(order_id: str, body: dict, current_user: dict = 
     raw_items = body.get("items") or []
     line_items = []
     for ri in raw_items:
+        unit = ri.get("unit", "piece")
         try:
             price = round(float(ri.get("price", 0)), 2)
-            qty = int(ri.get("quantity", 0) or 0)
+            # kg lines keep fractional quantities; piece lines stay integers
+            qty = round(float(ri.get("quantity", 0) or 0), 3) if unit == "kg" else int(ri.get("quantity", 0) or 0)
         except (TypeError, ValueError):
             continue
         name = (ri.get("item_name") or "").strip()
@@ -333,7 +347,7 @@ async def admin_edit_order_bill(order_id: str, body: dict, current_user: dict = 
             continue
         line_items.append({
             "service_name": (ri.get("service_name") or "").strip() or "Service",
-            "item_name": name, "price": price, "quantity": qty,
+            "item_name": name, "price": price, "quantity": qty, "unit": unit,
             "subtotal": round(price * qty, 2),
             "category": ri.get("category", "unisex"),
         })
@@ -653,8 +667,7 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
     for ri in raw_items:
         sid = ri.get("service_id")
         item_id = ri.get("item_id")
-        qty = int(ri.get("quantity", 0) or 0)
-        if not sid or not item_id or qty <= 0:
+        if not sid or not item_id:
             continue
         if sid not in service_cache:
             try:
@@ -667,10 +680,22 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         matched = next((it for it in svc.get("items", []) if str(it.get("_id", "")) == item_id), None)
         if not matched:
             continue
+        # Weight-priced services (pricing_unit == "kg") take fractional
+        # quantities (e.g. 2.5 kg); everything else stays a piece count.
+        unit = svc.get("pricing_unit", "piece")
+        try:
+            if unit == "kg":
+                qty = round(float(ri.get("quantity", 0) or 0), 3)
+            else:
+                qty = int(ri.get("quantity", 0) or 0)
+        except (TypeError, ValueError):
+            continue
+        if qty <= 0:
+            continue
         price = float(matched["price"])
         line_items.append({
             "service_name": svc["name"], "item_name": matched["name"],
-            "price": price, "quantity": qty,
+            "price": price, "quantity": qty, "unit": unit,
             "subtotal": round(price * qty, 2),
             "category": matched.get("category", "unisex"),
         })
@@ -734,15 +759,21 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
     discount = round(min(coupon_discount + manual_discount, subtotal), 2)
     total_amount = round(subtotal + delivery_fee - discount, 2)
 
-    # Address
+    # Address — only the text matters for rider navigation (riders open maps by
+    # address string); coordinates are optional and fall back to the store's.
     if fulfillment_mode == "rider_delivery":
         addr = body.get("address") or {}
-        if not addr.get("full_address") or addr.get("latitude") is None or addr.get("longitude") is None:
-            raise HTTPException(status_code=400, detail="Delivery address with location is required for rider delivery")
+        if not addr.get("full_address"):
+            raise HTTPException(status_code=400, detail="Delivery address is required for rider delivery")
+        try:
+            lat = float(addr["latitude"]) if addr.get("latitude") not in (None, "") else store.get("latitude")
+            lng = float(addr["longitude"]) if addr.get("longitude") not in (None, "") else store.get("longitude")
+        except (TypeError, ValueError):
+            lat, lng = store.get("latitude"), store.get("longitude")
         address = {
             "id": None, "label": addr.get("label", "Delivery"),
             "full_address": addr["full_address"],
-            "latitude": float(addr["latitude"]), "longitude": float(addr["longitude"]),
+            "latitude": lat, "longitude": lng,
             "city": addr.get("city", store.get("city", "")),
         }
     else:
@@ -1331,7 +1362,7 @@ async def admin_list_services(current_user: dict = Depends(get_current_user)):
         "pricing_unit": s.get("pricing_unit", "piece"),
         "service_type": s.get("service_type", "pickup_drop"),
         "active": s.get("active", True),
-        "items": [{"id": str(i.get("_id", i.get("id", ""))), "name": i["name"], "price": i["price"], "category": i.get("category", "unisex")} for i in s.get("items", [])],
+        "items": [{"id": str(i.get("_id", i.get("id", ""))), "name": i["name"], "price": i["price"], "category": i.get("category", "unisex")} for i in _sorted_items(s.get("items", []))],
     } for s in services]
 
 

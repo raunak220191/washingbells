@@ -140,6 +140,7 @@ class CartItemResponse(BaseModel):
     quantity: int
     subtotal: float
     category: str = "unisex"
+    unit: str = "piece"  # from the service's pricing_unit (e.g. "kg")
 
 
 class CartResponse(BaseModel):
@@ -174,9 +175,10 @@ class OrderItemResponse(BaseModel):
     service_name: str
     item_name: str
     price: float
-    quantity: int
+    quantity: float  # fractional for weight-priced (kg) lines; whole for pieces
     subtotal: float
     category: str = "unisex"
+    unit: str = "piece"  # "piece" | "kg" | "pair" | ...
 
 
 class OrderResponse(BaseModel):

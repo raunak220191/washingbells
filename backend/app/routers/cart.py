@@ -51,6 +51,7 @@ async def _build_cart_response(db, user_id: str) -> CartResponse:
                 quantity=qty,
                 subtotal=round(price * qty, 2),
                 category=matched_item.get("category", "unisex"),
+                unit=svc.get("pricing_unit", "piece"),
             )
         )
 

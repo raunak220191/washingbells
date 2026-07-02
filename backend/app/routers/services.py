@@ -2,6 +2,7 @@ import os
 import yaml
 from fastapi import APIRouter, HTTPException
 from app.core.database import get_db
+from app.core.categories import ITEM_CATEGORIES
 from app.schemas.schemas import ServiceResponse, ServiceItemResponse
 
 router = APIRouter(prefix="/services", tags=["Services"])
@@ -9,10 +10,21 @@ router = APIRouter(prefix="/services", tags=["Services"])
 # Path to the admin-editable rate list
 RATE_LIST_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "data", "rate_list.yaml")
 
+# Sort applied at the API boundary so every consumer (apps, admin pickers,
+# walk-in) gets a stable order: canonical category first, then name. Without
+# this, items render in YAML/$push insertion order and degrade as the catalog
+# is edited.
+_CATEGORY_RANK = {c: i for i, c in enumerate(ITEM_CATEGORIES)}
+
+
+def _item_sort_key(item: dict):
+    return (_CATEGORY_RANK.get(item.get("category", "unisex"), len(ITEM_CATEGORIES)),
+            (item.get("name") or "").lower())
+
 
 def _format_service(svc: dict) -> ServiceResponse:
     items = []
-    for item in svc.get("items", []):
+    for item in sorted(svc.get("items", []), key=_item_sort_key):
         items.append(
             ServiceItemResponse(
                 id=str(item["_id"]) if "_id" in item else item.get("id", ""),
