@@ -17,7 +17,11 @@ type Line = {
   service_id: string; item_id: string;
   service_name: string; item_name: string;
   price: number; quantity: number;
+  unit: string; // "piece" | "kg" | ...
 };
+
+// Display helper: 2.5 → "2.5 kg", 2 → "2 kg"
+const fmtKg = (q: number) => `${Number(q.toFixed(3))} kg`;
 type Coupon = {
   id: string; code: string; name: string; type: "percent" | "flat";
   value: number; min_order: number; max_discount: number | null;
@@ -52,6 +56,8 @@ export default function CreateOrderPage() {
   const [svcId, setSvcId] = useState("");
   const [itemId, setItemId] = useState("");
   const [qty, setQty] = useState("1"); // string so the field can be cleared while typing
+  const [wKg, setWKg] = useState("1"); // weight entry for kg-priced services
+  const [wG, setWG] = useState("0");  // grams part (0-999)
   const [lines, setLines] = useState<Line[]>([]);
 
   // options
@@ -62,7 +68,7 @@ export default function CreateOrderPage() {
   const [couponCode, setCouponCode] = useState("");
   const [discount, setDiscount] = useState("");
   const [instructions, setInstructions] = useState("");
-  const [addr, setAddr] = useState({ full_address: "", city: "", latitude: "", longitude: "" });
+  const [addr, setAddr] = useState({ full_address: "", city: "" });
 
   // submit
   const [submitting, setSubmitting] = useState(false);
@@ -108,7 +114,12 @@ export default function CreateOrderPage() {
   const manualDiscount = Math.max(0, Number(discount) || 0);
   const discountNum = Math.min(couponDiscount + manualDiscount, subtotal);
   const total = Math.max(0, Math.round(subtotal + deliveryFee - discountNum));
-  const totalGarments = lines.reduce((n, l) => n + l.quantity, 0);
+  const totalGarments = lines.filter((l) => l.unit !== "kg").reduce((n, l) => n + l.quantity, 0);
+  const totalWeight = lines.filter((l) => l.unit === "kg").reduce((n, l) => n + l.quantity, 0);
+  const subtotalLabel = [
+    totalGarments ? `${totalGarments} garment${totalGarments === 1 ? "" : "s"}` : "",
+    totalWeight ? fmtKg(totalWeight) : "",
+  ].filter(Boolean).join(" + ") || "empty";
 
   const doLookup = async () => {
     if (phone.replace(/\D/g, "").length < 10) { setError("Enter a valid 10-digit phone"); return; }
@@ -122,42 +133,59 @@ export default function CreateOrderPage() {
     } finally { setLookingUp(false); }
   };
 
+  const isKgService = activeService?.pricing_unit === "kg";
+
   const addLine = () => {
-    const q = Math.max(1, parseInt(qty, 10) || 1);
     if (!activeService || !itemId) return;
     const it = activeService.items.find((i) => i.id === itemId);
     if (!it) return;
+    const unit = activeService.pricing_unit === "kg" ? "kg" : "piece";
+    let q: number;
+    if (unit === "kg") {
+      // kg + grams → fractional quantity (min 100 g)
+      q = Math.max(0.1, (parseInt(wKg, 10) || 0) + (parseInt(wG, 10) || 0) / 1000);
+      q = Number(q.toFixed(3));
+    } else {
+      q = Math.max(1, parseInt(qty, 10) || 1);
+    }
     setLines((prev) => {
       const existing = prev.find((l) => l.service_id === svcId && l.item_id === itemId);
       if (existing) {
         return prev.map((l) =>
-          l.service_id === svcId && l.item_id === itemId ? { ...l, quantity: l.quantity + q } : l,
+          l.service_id === svcId && l.item_id === itemId
+            ? { ...l, quantity: Number((l.quantity + q).toFixed(3)) } : l,
         );
       }
       return [...prev, {
         service_id: svcId, item_id: itemId,
         service_name: activeService.name, item_name: it.name,
-        price: it.price, quantity: q,
+        price: it.price, quantity: q, unit,
       }];
     });
-    setItemId(""); setQty("1");
+    setItemId(""); setQty("1"); setWKg("1"); setWG("0");
   };
 
   // Accept the raw input so the field can be emptied mid-edit; 0 means "being
-  // cleared" and renders blank. clampLineQty (onBlur) restores a minimum of 1.
+  // cleared" and renders blank. clampLineQty (onBlur) restores the minimum.
   const setLineQty = (i: number, raw: string) =>
-    setLines((prev) => prev.map((l, idx) =>
-      idx === i ? { ...l, quantity: raw === "" ? 0 : Math.max(0, Math.floor(Number(raw) || 0)) } : l));
+    setLines((prev) => prev.map((l, idx) => {
+      if (idx !== i) return l;
+      if (raw === "") return { ...l, quantity: 0 };
+      const n = Number(raw) || 0;
+      return { ...l, quantity: l.unit === "kg" ? Math.max(0, n) : Math.max(0, Math.floor(n)) };
+    }));
   const clampLineQty = (i: number) =>
-    setLines((prev) => prev.map((l, idx) => (idx === i ? { ...l, quantity: Math.max(1, l.quantity) } : l)));
+    setLines((prev) => prev.map((l, idx) => (idx === i
+      ? { ...l, quantity: l.unit === "kg" ? Math.max(0.1, Number(l.quantity.toFixed(3))) : Math.max(1, l.quantity) }
+      : l)));
   const removeLine = (i: number) => setLines((prev) => prev.filter((_, idx) => idx !== i));
 
   const submit = async () => {
     setError("");
     if (phone.replace(/\D/g, "").length < 10) { setError("Enter a valid 10-digit customer phone"); return; }
     if (lines.length === 0) { setError("Add at least one item"); return; }
-    if (fulfillment === "rider_delivery" && (!addr.full_address || !addr.latitude || !addr.longitude)) {
-      setError("Home delivery needs a full address with latitude & longitude");
+    if (fulfillment === "rider_delivery" && !addr.full_address.trim()) {
+      setError("Home delivery needs a delivery address");
       return;
     }
     setSubmitting(true);
@@ -177,10 +205,9 @@ export default function CreateOrderPage() {
         discount: manualDiscount || undefined,
       };
       if (fulfillment === "rider_delivery") {
-        payload.address = {
-          full_address: addr.full_address, city: addr.city,
-          latitude: Number(addr.latitude), longitude: Number(addr.longitude), label: "Delivery",
-        };
+        // No coordinates — riders navigate by the address text; the backend
+        // falls back to the store's location for the map pin.
+        payload.address = { full_address: addr.full_address.trim(), city: addr.city, label: "Delivery" };
       }
       const r = await api.post("/admin/orders/create", payload);
       setResult(r.data);
@@ -202,7 +229,8 @@ export default function CreateOrderPage() {
     setLines([]); setSvcId(""); setItemId(""); setQty("1"); setStoreId("");
     setFulfillment("counter_pickup"); setPayment("cash"); setPaymentTiming("pay_now");
     setCouponCode(""); setDiscount(""); setInstructions("");
-    setAddr({ full_address: "", city: "", latitude: "", longitude: "" });
+    setAddr({ full_address: "", city: "" });
+    setWKg("1"); setWG("0");
     setResult(null); setError("");
   };
 
@@ -286,25 +314,45 @@ export default function CreateOrderPage() {
 
           {/* Items */}
           <Section icon={<PackagePlus size={14} />} title="Items">
-            <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_70px_auto] gap-2">
+            <div className={`grid grid-cols-1 gap-2 ${isKgService ? "sm:grid-cols-[1fr_1fr_150px_auto]" : "sm:grid-cols-[1fr_1fr_70px_auto]"}`}>
               <select className={inputCls} value={svcId} onChange={(e) => { setSvcId(e.target.value); setItemId(""); }}>
                 <option value="">Service…</option>
-                {services.map((s) => <option key={s.id} value={s.id}>{s.name}</option>)}
+                {services.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}{s.pricing_unit === "kg" ? " (per kg)" : ""}</option>
+                ))}
               </select>
               <select className={inputCls} value={itemId} onChange={(e) => setItemId(e.target.value)} disabled={!activeService}>
                 <option value="">Item…</option>
                 {activeService?.items.map((it) => (
-                  <option key={it.id} value={it.id}>{it.name} — ₹{it.price}</option>
+                  <option key={it.id} value={it.id}>{it.name} — ₹{it.price}{isKgService ? "/kg" : ""}</option>
                 ))}
               </select>
-              <input type="number" min={1} className={inputCls} value={qty}
-                onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
-                onBlur={() => setQty((q) => String(Math.max(1, parseInt(q, 10) || 1)))} />
+              {isKgService ? (
+                <div className="grid grid-cols-2 gap-1">
+                  <div className="relative">
+                    <input type="number" min={0} className={`${inputCls} pr-7`} value={wKg}
+                      onChange={(e) => setWKg(e.target.value.replace(/[^\d]/g, ""))} />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">kg</span>
+                  </div>
+                  <div className="relative">
+                    <input type="number" min={0} max={999} step={50} className={`${inputCls} pr-5`} value={wG}
+                      onChange={(e) => setWG(e.target.value.replace(/[^\d]/g, "").slice(0, 3))} />
+                    <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">g</span>
+                  </div>
+                </div>
+              ) : (
+                <input type="number" min={1} className={inputCls} value={qty}
+                  onChange={(e) => setQty(e.target.value.replace(/[^\d]/g, ""))}
+                  onBlur={() => setQty((q) => String(Math.max(1, parseInt(q, 10) || 1)))} />
+              )}
               <button onClick={addLine} disabled={!itemId}
                 className="inline-flex items-center justify-center gap-1 bg-amber-500 text-forest px-3 rounded-lg text-sm font-semibold hover:bg-amber-400 disabled:opacity-40">
                 <Plus size={15} /> Add
               </button>
             </div>
+            {isKgService && (
+              <p className="mt-1.5 text-[11px] text-gray-400">Weight-priced service — enter kg and grams; the price is per kilogram.</p>
+            )}
 
             {lines.length === 0 ? (
               <p className="text-sm text-gray-400 mt-3">No items yet. Pick a service & item above.</p>
@@ -314,12 +362,20 @@ export default function CreateOrderPage() {
                   <div key={`${l.service_id}-${l.item_id}`} className="flex items-center gap-3 py-2">
                     <div className="flex-1 min-w-0">
                       <div className="text-[11px] text-gray-400 uppercase">{l.service_name}</div>
-                      <div className="text-sm text-gray-800 truncate">{l.item_name} · ₹{l.price}</div>
+                      <div className="text-sm text-gray-800 truncate">
+                        {l.item_name} · ₹{l.price}{l.unit === "kg" ? "/kg" : ""}
+                      </div>
                     </div>
-                    <input type="number" min={1} value={l.quantity === 0 ? "" : l.quantity}
-                      onChange={(e) => setLineQty(i, e.target.value)}
-                      onBlur={() => clampLineQty(i)}
-                      className="w-14 border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:border-amber-500" />
+                    <div className="relative">
+                      <input type="number" min={l.unit === "kg" ? 0.1 : 1} step={l.unit === "kg" ? 0.1 : 1}
+                        value={l.quantity === 0 ? "" : l.quantity}
+                        onChange={(e) => setLineQty(i, e.target.value)}
+                        onBlur={() => clampLineQty(i)}
+                        className={`${l.unit === "kg" ? "w-20 pr-7" : "w-14"} border border-gray-200 rounded-lg px-2 py-1 text-sm text-center focus:outline-none focus:border-amber-500`} />
+                      {l.unit === "kg" && (
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-gray-400">kg</span>
+                      )}
+                    </div>
                     <div className="w-16 text-right text-sm font-semibold text-gray-700">₹{Math.round(l.price * l.quantity)}</div>
                     <button onClick={() => removeLine(i)} className="text-gray-300 hover:text-red-500"><Trash2 size={16} /></button>
                   </div>
@@ -375,13 +431,9 @@ export default function CreateOrderPage() {
             </div>
             {fulfillment === "rider_delivery" && (
               <div className="grid grid-cols-2 gap-2 mt-3">
-                <input className={`${inputCls} col-span-2`} placeholder="Full delivery address"
+                <input className={`${inputCls} col-span-2`} placeholder="Full delivery address (house, street, landmark)"
                   value={addr.full_address} onChange={(e) => setAddr({ ...addr, full_address: e.target.value })} />
                 <input className={inputCls} placeholder="City" value={addr.city} onChange={(e) => setAddr({ ...addr, city: e.target.value })} />
-                <div className="grid grid-cols-2 gap-2">
-                  <input className={inputCls} placeholder="Latitude" value={addr.latitude} onChange={(e) => setAddr({ ...addr, latitude: e.target.value })} />
-                  <input className={inputCls} placeholder="Longitude" value={addr.longitude} onChange={(e) => setAddr({ ...addr, longitude: e.target.value })} />
-                </div>
               </div>
             )}
             <div className="mt-3">
@@ -398,7 +450,7 @@ export default function CreateOrderPage() {
             <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3 flex items-center gap-1.5">
               <Receipt size={13} /> Bill
             </div>
-            <Row label={`Subtotal (${totalGarments} garments)`} value={`₹${Math.round(subtotal)}`} />
+            <Row label={`Subtotal (${subtotalLabel})`} value={`₹${Math.round(subtotal)}`} />
             <Row label="Delivery fee" value={deliveryFee ? `₹${deliveryFee}` : "Free"} />
 
             {/* Coupon */}
