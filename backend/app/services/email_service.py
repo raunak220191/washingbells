@@ -319,6 +319,30 @@ async def send_event(
     return sent
 
 
+def admin_addresses() -> list[str]:
+    """EMAIL_ADMIN_ADDRESS supports a comma-separated list of recipients."""
+    raw = get_settings().EMAIL_ADMIN_ADDRESS or ""
+    return [a.strip() for a in raw.split(",") if a.strip()]
+
+
+async def send_event_to_admins(event: str, *, context: Optional[dict] = None,
+                               order_id: Optional[str] = None) -> bool:
+    """Send an admin-audience event to every configured admin address.
+
+    One send_event per recipient so each gets its own email_log row. Returns
+    True if at least one send succeeded. Never raises.
+    """
+    ok = False
+    for addr in admin_addresses():
+        try:
+            if await send_event(event, to_email=addr, context=context,
+                                audience="admin", order_id=order_id):
+                ok = True
+        except Exception as e:
+            logger.warning(f"Admin email {event} to {addr} failed: {e}")
+    return ok
+
+
 # ── Default event seed data ────────────────────────────────────
 
 DEFAULT_EVENTS: list[dict] = [
@@ -424,6 +448,63 @@ DEFAULT_EVENTS: list[dict] = [
         "body_text": "New store registration awaiting approval:\n"
                      "  Name: {{store_name}}\n  Vendor: {{vendor_code}}\n  City: {{city}}\n"
                      "  Owner: {{owner_name}} ({{owner_phone}})\n\nReview in the admin panel.",
+    },
+    {
+        "event": "new_order_admin", "audience": "admin", "enabled": True,
+        "name": "New Order (Admin)",
+        "subject_template": "New order {{order_number}} — ₹{{total_amount}} ({{source}})",
+        "body_html": "<p>A new order just came in.</p>"
+                     "<ul>"
+                     "<li><strong>Order:</strong> {{order_number}}</li>"
+                     "<li><strong>Customer:</strong> {{customer_name}} ({{customer_phone}})</li>"
+                     "<li><strong>Total:</strong> ₹{{total_amount}}</li>"
+                     "<li><strong>Items:</strong> {{items_summary}}</li>"
+                     "<li><strong>Source:</strong> {{source}}</li>"
+                     "<li><strong>Store:</strong> {{store_name}}</li>"
+                     "</ul>",
+        "body_text": "New order {{order_number}}\n  Customer: {{customer_name}} ({{customer_phone}})\n"
+                     "  Total: ₹{{total_amount}}\n  Items: {{items_summary}}\n"
+                     "  Source: {{source}}\n  Store: {{store_name}}\n",
+    },
+    {
+        "event": "order_ready_admin", "audience": "admin", "enabled": True,
+        "name": "Order Ready (Admin)",
+        "subject_template": "Order {{order_number}} is ready — {{store_name}}",
+        "body_html": "<p>Order <strong>{{order_number}}</strong> for {{customer_name}} is ready at "
+                     "<strong>{{store_name}}</strong>. Total ₹{{total_amount}}.</p>",
+        "body_text": "Order {{order_number}} for {{customer_name}} is ready at {{store_name}}. "
+                     "Total ₹{{total_amount}}.",
+    },
+    {
+        "event": "order_delivered_admin", "audience": "admin", "enabled": True,
+        "name": "Order Delivered (Admin)",
+        "subject_template": "Order {{order_number}} delivered — ₹{{total_amount}}",
+        "body_html": "<p>Order <strong>{{order_number}}</strong> was delivered to {{customer_name}}.</p>"
+                     "<ul><li><strong>Total:</strong> ₹{{total_amount}}</li>"
+                     "<li><strong>Payment:</strong> {{payment_status}} ({{payment_method}})</li>"
+                     "<li><strong>Mode:</strong> {{mode}}</li></ul>",
+        "body_text": "Order {{order_number}} delivered to {{customer_name}}. Total ₹{{total_amount}}, "
+                     "payment {{payment_status}} ({{payment_method}}), mode {{mode}}.",
+    },
+    {
+        "event": "weekly_summary_admin", "audience": "admin", "enabled": True,
+        "name": "Weekly Summary (Admin)",
+        "subject_template": "WashingBells weekly summary — {{week_range}}",
+        "body_html": "<h3>WashingBells — week of {{week_range}}</h3>"
+                     "<ul>"
+                     "<li><strong>New orders:</strong> {{orders_count}}</li>"
+                     "<li><strong>Delivered:</strong> {{delivered_count}}</li>"
+                     "<li><strong>Revenue (delivered):</strong> ₹{{revenue}}</li>"
+                     "<li><strong>Platform fees:</strong> ₹{{platform_fees}}</li>"
+                     "<li><strong>New customers:</strong> {{new_customers}}</li>"
+                     "<li><strong>Active orders now:</strong> {{active_orders}}</li>"
+                     "</ul>"
+                     "<p>Status breakdown: {{status_breakdown}}</p>",
+        "body_text": "WashingBells weekly summary ({{week_range}})\n"
+                     "  New orders: {{orders_count}}\n  Delivered: {{delivered_count}}\n"
+                     "  Revenue: ₹{{revenue}}\n  Platform fees: ₹{{platform_fees}}\n"
+                     "  New customers: {{new_customers}}\n  Active orders now: {{active_orders}}\n"
+                     "  Status breakdown: {{status_breakdown}}\n",
     },
 ]
 

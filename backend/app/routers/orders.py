@@ -8,7 +8,7 @@ from app.core.security import get_current_user
 from app.schemas.schemas import OrderCreate, OrderResponse, RescheduleRequest
 from app.routers.cart import _build_cart_response
 from app.services.push_service import notify_store_new_order, notify_customer_order_update
-from app.services.email_service import send_event as send_email_event
+from app.services.email_service import send_event as send_email_event, send_event_to_admins
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 FREE_DELIVERY_THRESHOLD = 299.0
@@ -96,6 +96,10 @@ def _format_order(order):
         razorpay_order_id=order.get("razorpay_order_id"),
         order_source=order.get("order_source", "app"),
         fulfillment_mode=order.get("fulfillment_mode", "rider_delivery"),
+        pickup_otp=order.get("pickup_otp"),
+        pickup_otp_verified=order.get("pickup_otp_verified", False),
+        delivery_otp=order.get("delivery_otp"),
+        delivery_otp_verified=order.get("delivery_otp_verified", False),
         created_at=order["created_at"], updated_at=order["updated_at"],
     )
 
@@ -242,6 +246,19 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
                 },
             )
         except Exception: pass
+
+    # Email: new order → admin recipients
+    try:
+        await send_event_to_admins("new_order_admin", order_id=str(created["_id"]), context={
+            "order_number": created["order_number"],
+            "customer_name": customer_name,
+            "customer_phone": current_user.get("phone", ""),
+            "total_amount": f"{created['total_amount']:.0f}",
+            "items_summary": ", ".join(f"{i['item_name']} × {i['quantity']}" for i in created.get("items", [])[:6]),
+            "source": "customer app",
+            "store_name": (store_doc or {}).get("name", "auto-assign"),
+        })
+    except Exception: pass
 
     return _format_order(created)
 

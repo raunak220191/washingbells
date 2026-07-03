@@ -836,6 +836,21 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
     except Exception:
         pass
 
+    # Email: new order → admin recipients (non-blocking)
+    try:
+        from app.services.email_service import send_event_to_admins
+        await send_event_to_admins("new_order_admin", order_id=str(result.inserted_id), context={
+            "order_number": order_number,
+            "customer_name": user.get("name") or "Customer",
+            "customer_phone": user.get("phone", ""),
+            "total_amount": f"{total_amount:.0f}",
+            "items_summary": ", ".join(f"{li['item_name']} × {li['quantity']}" for li in line_items[:6]),
+            "source": "admin console",
+            "store_name": store.get("name", ""),
+        })
+    except Exception:
+        pass
+
     return {
         "id": str(result.inserted_id),
         "order_number": order_number,
@@ -2078,3 +2093,70 @@ async def admin_settle_payout(store_id: str, body: dict, current_user: dict = De
         "amount": amount,
         "remaining_pending": round(pending - amount, 2),
     }
+
+
+# ════════════════════════════════════════════════════════════
+# WEEKLY SUMMARY EMAIL (admin recipients)
+# ════════════════════════════════════════════════════════════
+
+import hmac as _hmac
+from datetime import timedelta
+from app.core.config import get_settings as _get_settings
+
+
+async def _send_weekly_summary(db) -> dict:
+    """Compute last-7-days aggregates and email them to all admin recipients."""
+    from app.services.email_service import send_event_to_admins, admin_addresses
+    now = datetime.now(timezone.utc)
+    week_ago = now - timedelta(days=7)
+
+    orders_count = await db.orders.count_documents({"created_at": {"$gte": week_ago}})
+    delivered_count = await db.orders.count_documents({"delivered_at": {"$gte": week_ago}})
+    rev = await db.orders.aggregate([
+        {"$match": {"status": "delivered", "delivered_at": {"$gte": week_ago}}},
+        {"$group": {"_id": None, "revenue": {"$sum": "$total_amount"},
+                    "platform_fees": {"$sum": "$platform_fee"}}},
+    ]).to_list(1)
+    revenue = round((rev[0]["revenue"] if rev else 0) or 0, 2)
+    platform_fees = round((rev[0]["platform_fees"] if rev else 0) or 0, 2)
+    new_customers = await db.users.count_documents({"role": "customer", "created_at": {"$gte": week_ago}})
+    active_orders = await db.orders.count_documents({"status": {"$nin": ["delivered", "cancelled", "rejected"]}})
+    breakdown_rows = await db.orders.aggregate([
+        {"$match": {"created_at": {"$gte": week_ago}}},
+        {"$group": {"_id": "$status", "n": {"$sum": 1}}},
+        {"$sort": {"n": -1}},
+    ]).to_list(20)
+    status_breakdown = ", ".join(f"{r['_id']}: {r['n']}" for r in breakdown_rows) or "no orders"
+
+    context = {
+        "week_range": f"{week_ago.strftime('%d %b')} – {now.strftime('%d %b %Y')}",
+        "orders_count": str(orders_count),
+        "delivered_count": str(delivered_count),
+        "revenue": f"{revenue:.0f}",
+        "platform_fees": f"{platform_fees:.0f}",
+        "new_customers": str(new_customers),
+        "active_orders": str(active_orders),
+        "status_breakdown": status_breakdown,
+    }
+    sent = await send_event_to_admins("weekly_summary_admin", context=context)
+    return {"sent": sent, "recipients": admin_addresses(), **context}
+
+
+@router.post("/reports/weekly-email")
+async def send_weekly_summary_now(current_user: dict = Depends(get_current_user)):
+    """Super-admin console: send the weekly summary right now."""
+    _require_admin(current_user)
+    return await _send_weekly_summary(get_db())
+
+
+@router.post("/reports/weekly-email-cron")
+async def weekly_summary_cron(key: str = ""):
+    """Machine trigger for Cloud Scheduler. Guarded by WEEKLY_REPORT_KEY
+
+    (same shared-secret pattern as the SendGrid inbound webhook)."""
+    expected = _get_settings().WEEKLY_REPORT_KEY
+    if not expected:
+        raise HTTPException(status_code=503, detail="Weekly report key not configured")
+    if not _hmac.compare_digest(key, expected):
+        raise HTTPException(status_code=403, detail="Invalid key")
+    return await _send_weekly_summary(get_db())

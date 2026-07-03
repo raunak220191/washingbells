@@ -12,6 +12,7 @@ from app.schemas.phase2_schemas import (
     RiderLocationUpdate, RiderStatusUpdate,
     RiderDocumentsUpload,
 )
+from app.services.push_service import notify_customer_order_update
 
 router = APIRouter(prefix="/delivery", tags=["Delivery (Rider)"])
 
@@ -160,6 +161,10 @@ async def get_worklist(current_user: dict = Depends(get_current_user)):
             # drop at the store. Surface that state + the OTP to show the owner.
             "pickup_done": t.get("pickup_done", False),
             "store_drop_otp": order.get("store_received_otp") if order else None,
+            # Delivery trips: the rider must know whether to collect cash.
+            "payment_status": order.get("payment_status", "pending") if order else "pending",
+            "payment_method": order.get("payment_method", "online") if order else "online",
+            "total_amount": order.get("total_amount", 0) if order else 0,
             "created_at": t["created_at"],
         })
     return result
@@ -343,10 +348,17 @@ async def generate_pickup_otp(trip_id: str, current_user: dict = Depends(get_cur
         {"_id": ObjectId(trip["order_id"])},
         {"$set": {"pickup_otp": otp, "pickup_otp_verified": False}},
     )
-    # In production: send OTP via SMS/push to customer
+    # The OTP goes to the CUSTOMER only (push + visible on their order screen);
+    # the rider must ask them for it — it is never returned to the rider.
     order = await db.orders.find_one({"_id": ObjectId(trip["order_id"])})
-    print(f"[DEV] Pickup OTP for order {order['order_number']}: {otp}")
-    return {"message": "OTP sent to customer", "dev_otp": otp}
+    try:
+        await notify_customer_order_update(
+            order["user_id"], order["order_number"], order.get("status", "placed"),
+            f"Your pickup OTP is {otp}. Share it with your rider to hand over the clothes.",
+        )
+    except Exception as e:
+        print(f"Pickup OTP push failed: {e}")
+    return {"message": "OTP sent to the customer's app — ask them for the code"}
 
 
 @router.post("/{trip_id}/verify-pickup-otp")
@@ -441,9 +453,16 @@ async def generate_delivery_otp(trip_id: str, current_user: dict = Depends(get_c
         {"_id": ObjectId(trip["order_id"])},
         {"$set": {"delivery_otp": otp, "delivery_otp_verified": False}},
     )
+    # Customer-only, same as pickup: push + order screen; never shown to the rider.
     order = await db.orders.find_one({"_id": ObjectId(trip["order_id"])})
-    print(f"[DEV] Delivery OTP for order {order['order_number']}: {otp}")
-    return {"message": "OTP sent to customer", "dev_otp": otp}
+    try:
+        await notify_customer_order_update(
+            order["user_id"], order["order_number"], order.get("status", "out_for_delivery"),
+            f"Your delivery OTP is {otp}. Share it with your rider to receive the clothes.",
+        )
+    except Exception as e:
+        print(f"Delivery OTP push failed: {e}")
+    return {"message": "OTP sent to the customer's app — ask them for the code"}
 
 
 @router.post("/{trip_id}/verify-delivery-otp")
@@ -469,12 +488,20 @@ async def verify_delivery_otp(trip_id: str, body: OTPVerifyRequest, current_user
     platform_fee = round(total * 0.20, 2)
     store_payout = round(total - platform_fee, 2)
 
-    await db.orders.update_one({"_id": order["_id"]}, {"$set": {
+    update = {
         "delivery_otp_verified": True, "delivered_at": now,
         "status": "delivered", "status_timeline": tl,
         "store_payout": store_payout, "platform_fee": platform_fee,
         "rider_delivery_fee": RIDER_FEE, "updated_at": now,
-    }})
+    }
+    # COD settlement: handover happened, so cash changed hands — close the
+    # payment. (A customer who paid online moments earlier is already "paid"
+    # and skips this.)
+    if order.get("payment_status") != "paid":
+        update["payment_status"] = "paid"
+        tl.append({"status": "delivered", "timestamp": now.isoformat(), "note": "Payment collected on delivery"})
+
+    await db.orders.update_one({"_id": order["_id"]}, {"$set": update})
     await db.trips.update_one({"_id": ObjectId(trip_id)}, {"$set": {"status": "completed", "completed_at": now}})
 
     # Credit rider fee
@@ -506,6 +533,19 @@ async def verify_delivery_otp(trip_id: str, body: OTPVerifyRequest, current_user
                 "total_amount": f"{order.get('total_amount', 0):.0f}",
             },
         )
+    except Exception: pass
+
+    # Email: order delivered → admin recipients (non-blocking)
+    try:
+        from app.services.email_service import send_event_to_admins
+        await send_event_to_admins("order_delivered_admin", order_id=str(order["_id"]), context={
+            "order_number": order["order_number"],
+            "customer_name": (customer.get("name") if customer else None) or "Customer",
+            "total_amount": f"{order.get('total_amount', 0):.0f}",
+            "payment_status": update.get("payment_status", order.get("payment_status", "pending")),
+            "payment_method": order.get("payment_method", ""),
+            "mode": "rider delivery",
+        })
     except Exception: pass
 
     return {"message": "Delivery confirmed! Order complete.", "order_number": order["order_number"],

@@ -93,22 +93,23 @@ async def verify_payment(
         )
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
-    # Mark as paid and confirmed
+    # Mark as paid. Only bump a freshly-placed order to "confirmed" — paying
+    # later (e.g. while out for delivery) must NOT regress the fulfilment
+    # status, or the tracker and store/rider state machines get corrupted.
     now = datetime.now(timezone.utc)
-    await db.orders.update_one(
-        {"_id": ObjectId(request.order_id)},
-        {
-            "$set": {
-                "payment_status": "paid",
-                "status": "confirmed",
-                "razorpay_payment_id": request.razorpay_payment_id,
-                "updated_at": now,
-            }
-        },
-    )
+    update = {
+        "payment_status": "paid",
+        "razorpay_payment_id": request.razorpay_payment_id,
+        "updated_at": now,
+    }
+    new_status = order.get("status", "placed")
+    if new_status in ("placed", "pending_payment"):
+        new_status = "confirmed"
+        update["status"] = new_status
+    await db.orders.update_one({"_id": ObjectId(request.order_id)}, {"$set": update})
 
     return {
         "message": "Payment verified successfully",
         "order_id": request.order_id,
-        "status": "confirmed",
+        "status": new_status,
     }

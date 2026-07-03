@@ -226,13 +226,11 @@ async def register_store(body: StoreRegisterRequest, current_user: dict = Depend
     }})
     token = create_access_token(data={"user_id": str(user["_id"]), "phone": user["phone"], "role": "store_owner"})
 
-    # Email admin that a new store is awaiting approval (non-blocking)
+    # Email all admin recipients that a new store is awaiting approval (non-blocking)
     try:
-        admin_addr = get_settings().EMAIL_ADMIN_ADDRESS
-        await send_email_event(
+        from app.services.email_service import send_event_to_admins
+        await send_event_to_admins(
             "new_store_pending_admin",
-            to_email=admin_addr,
-            audience="admin",
             context={
                 "store_name": body.store_name,
                 "vendor_code": vendor_code,

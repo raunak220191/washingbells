@@ -570,6 +570,18 @@ async def mark_ready(order_id: str, current_user: dict = Depends(get_current_use
         await notify_customer_order_update(order["user_id"], order["order_number"], "ready_for_delivery", msg)
     except Exception:
         pass
+    # Email: order ready → admin recipients (non-blocking)
+    try:
+        from app.services.email_service import send_event_to_admins
+        customer = await db.users.find_one({"_id": ObjectId(order["user_id"])})
+        await send_event_to_admins("order_ready_admin", order_id=order_id, context={
+            "order_number": order["order_number"],
+            "customer_name": (customer or {}).get("name") or "Customer",
+            "store_name": store.get("name", ""),
+            "total_amount": f"{order.get('total_amount', 0):.0f}",
+        })
+    except Exception:
+        pass
     return {"message": "Order marked as ready for delivery", "order_number": order["order_number"]}
 
 
@@ -973,6 +985,20 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
         )
     except Exception:
         pass
+    # Email: new order → admin recipients (non-blocking)
+    try:
+        from app.services.email_service import send_event_to_admins
+        await send_event_to_admins("new_order_admin", order_id=str(result.inserted_id), context={
+            "order_number": order_number,
+            "customer_name": user.get("name") or "Customer",
+            "customer_phone": user.get("phone", ""),
+            "total_amount": f"{total_amount:.0f}",
+            "items_summary": ", ".join(f"{li['item_name']} × {li['quantity']}" for li in line_items[:6]),
+            "source": "store walk-in",
+            "store_name": store.get("name", ""),
+        })
+    except Exception:
+        pass
     return {
         "id": str(result.inserted_id),
         "order_number": order_number,
@@ -1027,6 +1053,30 @@ async def complete_counter_order(order_id: str, current_user: dict = Depends(get
             order["user_id"], order["order_number"], "delivered",
             f"Order {order['order_number']} completed — thanks for choosing WashingBells!",
         )
+    except Exception:
+        pass
+    # Emails: delivered → customer + admin recipients (non-blocking)
+    try:
+        from app.services.email_service import send_event, send_event_to_admins
+        customer = await db.users.find_one({"_id": ObjectId(order["user_id"])})
+        await send_event(
+            "order_delivered",
+            to_email=(customer or {}).get("email"),
+            audience="customer", user_id=order["user_id"], order_id=order_id,
+            context={
+                "customer_name": (customer or {}).get("name") or "Customer",
+                "order_number": order["order_number"],
+                "total_amount": f"{order.get('total_amount', 0):.0f}",
+            },
+        )
+        await send_event_to_admins("order_delivered_admin", order_id=order_id, context={
+            "order_number": order["order_number"],
+            "customer_name": (customer or {}).get("name") or "Customer",
+            "total_amount": f"{order.get('total_amount', 0):.0f}",
+            "payment_status": update.get("payment_status", order.get("payment_status", "pending")),
+            "payment_method": order.get("payment_method", ""),
+            "mode": "counter pickup",
+        })
     except Exception:
         pass
     return {"message": "Order completed", "status": "delivered", "store_payout": store_payout}

@@ -47,6 +47,10 @@ class Settings(BaseSettings):
     # Public URL the backend is reachable at (used for unsubscribe links)
     PUBLIC_BASE_URL: str = ""
 
+    # Shared secret for the Cloud Scheduler weekly-summary trigger
+    # (POST /admin/reports/weekly-email-cron?key=...). Empty = endpoint disabled.
+    WEEKLY_REPORT_KEY: str = ""
+
     # Razorpay
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""

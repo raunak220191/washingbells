@@ -206,6 +206,12 @@ class OrderResponse(BaseModel):
     razorpay_order_id: Optional[str] = None
     order_source: str = "app"
     fulfillment_mode: str = "rider_delivery"
+    # Handover OTPs — only ever serialized to the order's OWNER (customer
+    # endpoints are user_id-scoped). The customer reads these to the rider.
+    pickup_otp: Optional[str] = None
+    pickup_otp_verified: bool = False
+    delivery_otp: Optional[str] = None
+    delivery_otp_verified: bool = False
     created_at: datetime
     updated_at: datetime
 
