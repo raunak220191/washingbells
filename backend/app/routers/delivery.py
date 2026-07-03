@@ -465,6 +465,60 @@ async def generate_delivery_otp(trip_id: str, current_user: dict = Depends(get_c
     return {"message": "OTP sent to the customer's app — ask them for the code"}
 
 
+@router.post("/{trip_id}/collect-payment")
+async def collect_payment(trip_id: str, current_user: dict = Depends(get_current_user)):
+    """Rider confirms cash collected from the customer on a delivery trip.
+
+    Marks the order paid and notifies the customer (push + email) and the
+    admin recipients. Idempotent — an already-paid order returns success.
+    """
+    await _require_rider(current_user)
+    db = get_db()
+    trip = await db.trips.find_one({"_id": ObjectId(trip_id), "rider_id": current_user["user_id"]})
+    if not trip or trip["trip_type"] != "delivery":
+        raise HTTPException(status_code=400, detail="Invalid delivery trip")
+    order = await db.orders.find_one({"_id": ObjectId(trip["order_id"])})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    if order.get("payment_status") == "paid":
+        return {"message": "Payment already recorded", "payment_status": "paid"}
+
+    now = datetime.now(timezone.utc)
+    tl = order.get("status_timeline", [])
+    tl.append({"status": order.get("status", "out_for_delivery"), "timestamp": now.isoformat(),
+               "note": "Cash collected by rider"})
+    await db.orders.update_one({"_id": order["_id"]}, {"$set": {
+        "payment_status": "paid", "payment_collected_by": current_user["user_id"],
+        "payment_collected_at": now, "status_timeline": tl, "updated_at": now,
+    }})
+
+    total = order.get("total_amount", 0)
+    customer = await db.users.find_one({"_id": ObjectId(order["user_id"])})
+    rider = await db.users.find_one({"_id": ObjectId(current_user["user_id"])})
+    try:
+        await notify_customer_order_update(
+            order["user_id"], order["order_number"], order.get("status", "out_for_delivery"),
+            f"Payment of ₹{total:.0f} received in cash — thank you!",
+        )
+    except Exception: pass
+    try:
+        from app.services.email_service import send_event, send_event_to_admins
+        ctx = {
+            "customer_name": (customer or {}).get("name") or "Customer",
+            "order_number": order["order_number"],
+            "total_amount": f"{total:.0f}",
+            "rider_name": (rider or {}).get("name") or (rider or {}).get("phone") or "Rider",
+        }
+        await send_event("payment_collected", to_email=(customer or {}).get("email"),
+                         audience="customer", user_id=order["user_id"],
+                         order_id=str(order["_id"]), context=ctx)
+        await send_event_to_admins("payment_collected_admin", order_id=str(order["_id"]), context=ctx)
+    except Exception: pass
+
+    return {"message": f"Cash of ₹{total:.0f} recorded — order marked paid",
+            "payment_status": "paid", "order_number": order["order_number"]}
+
+
 @router.post("/{trip_id}/verify-delivery-otp")
 async def verify_delivery_otp(trip_id: str, body: OTPVerifyRequest, current_user: dict = Depends(get_current_user)):
     """Rider enters customer OTP to confirm delivery. Completes the order."""

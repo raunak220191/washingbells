@@ -81,6 +81,13 @@ export const useTripStore = create((set, get) => ({
     return res.data;
   },
 
+  collectPayment: async (tripId) => {
+    const res = await api.post(`/delivery/${tripId}/collect-payment`);
+    // Refresh so trip.payment_status flips to paid and the banner updates
+    await get().fetchWorklist();
+    return res.data;
+  },
+
   verifyDeliveryOTP: async (tripId, otp) => {
     const res = await api.post(`/delivery/${tripId}/verify-delivery-otp`, { otp });
     await get().fetchWorklist();

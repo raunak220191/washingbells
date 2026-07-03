@@ -47,7 +47,7 @@ export default function ActiveTaskScreen() {
     worklist, startTrip, uploadPhotos,
     generatePickupOTP, verifyPickupOTP,
     generateDeliveryOTP, verifyDeliveryOTP,
-    generateStoreDropOTP, fetchWorklist,
+    generateStoreDropOTP, fetchWorklist, collectPayment,
   } = useTripStore();
 
   const trip = worklist.find(t => t.id === tripId);
@@ -179,6 +179,28 @@ export default function ActiveTaskScreen() {
     } catch (e) {
       Alert.alert("Wrong OTP", e?.response?.data?.detail || "The OTP entered is incorrect.");
     } finally { setLoading(false); }
+  };
+
+  const handleCollectPayment = () => {
+    Alert.alert(
+      "Confirm Cash Collected",
+      `Did you collect ₹${Number(trip?.total_amount || 0).toFixed(0)} in cash from the customer?`,
+      [
+        { text: "Not Yet", style: "cancel" },
+        {
+          text: "Yes, Collected",
+          onPress: async () => {
+            setLoading(true);
+            try {
+              const res = await collectPayment(tripId);
+              Alert.alert("Recorded ✅", res.message || "Payment marked as collected.");
+            } catch (e) {
+              Alert.alert("Error", e?.response?.data?.detail || "Could not record the payment.");
+            } finally { setLoading(false); }
+          },
+        },
+      ]
+    );
   };
 
   const handleVerifyDeliveryOTP = async () => {
@@ -410,14 +432,25 @@ export default function ActiveTaskScreen() {
             <Text style={styles.actionTitle}>Verify Delivery OTP</Text>
             <Text style={styles.actionDesc}>Ask the customer for the OTP sent to their phone, then confirm delivery.</Text>
 
-            {trip?.payment_status !== "paid" && (trip?.total_amount || 0) > 0 && (
-              <View style={styles.cashBanner}>
-                <Ionicons name="cash-outline" size={20} color={COLORS.gold} />
-                <Text style={styles.cashBannerText}>
-                  Collect ₹{Number(trip.total_amount).toFixed(0)} from the customer (unless they pay in the app) before confirming.
-                </Text>
+            {trip?.payment_status !== "paid" && (trip?.total_amount || 0) > 0 ? (
+              <>
+                <View style={styles.cashBanner}>
+                  <Ionicons name="cash-outline" size={20} color={COLORS.gold} />
+                  <Text style={styles.cashBannerText}>
+                    Collect ₹{Number(trip.total_amount).toFixed(0)} in cash from the customer (unless they pay in the app).
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.cashBtn} onPress={handleCollectPayment} disabled={loading}>
+                  <Ionicons name="cash" size={18} color={COLORS.white} />
+                  <Text style={styles.cashBtnText}>Cash Collected — ₹{Number(trip.total_amount).toFixed(0)}</Text>
+                </TouchableOpacity>
+              </>
+            ) : (trip?.total_amount || 0) > 0 ? (
+              <View style={styles.paidBanner}>
+                <Ionicons name="checkmark-circle" size={20} color={COLORS.forestGreen} />
+                <Text style={styles.paidBannerText}>Payment received — nothing to collect.</Text>
               </View>
-            )}
+            ) : null}
 
             <TouchableOpacity style={styles.secondaryBtn} onPress={handleGenerateDeliveryOTP} disabled={loading}>
               <Text style={styles.secondaryBtnText}>Send OTP to Customer</Text>
@@ -528,6 +561,18 @@ const styles = StyleSheet.create({
     borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.lg, gap: SPACING.sm,
   },
   cashBannerText: { flex: 1, fontSize: 13, color: COLORS.text, lineHeight: 18, fontWeight: "600" },
+  cashBtn: {
+    flexDirection: "row", alignItems: "center", justifyContent: "center", alignSelf: "stretch",
+    backgroundColor: COLORS.gold, paddingVertical: SPACING.md, borderRadius: RADIUS.full,
+    marginBottom: SPACING.lg, gap: SPACING.sm,
+  },
+  cashBtnText: { color: COLORS.white, fontSize: 15, fontWeight: "800" },
+  paidBanner: {
+    flexDirection: "row", alignItems: "center", alignSelf: "stretch",
+    backgroundColor: "#E8F5E9", borderWidth: 1, borderColor: COLORS.forestGreen,
+    borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.lg, gap: SPACING.sm,
+  },
+  paidBannerText: { flex: 1, fontSize: 13, color: COLORS.forestGreen, fontWeight: "700" },
 
   primaryBtn: {
     flexDirection: "row", backgroundColor: COLORS.forestGreen,

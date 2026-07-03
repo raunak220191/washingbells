@@ -487,6 +487,25 @@ DEFAULT_EVENTS: list[dict] = [
                      "payment {{payment_status}} ({{payment_method}}), mode {{mode}}.",
     },
     {
+        "event": "payment_collected", "audience": "customer", "enabled": True,
+        "name": "Payment Collected (Customer)",
+        "subject_template": "Payment received for order {{order_number}} — WashingBells",
+        "body_html": "<p>Hi {{customer_name}},</p>"
+                     "<p>We've received your cash payment of <strong>₹{{total_amount}}</strong> "
+                     "for order <strong>{{order_number}}</strong>. Thank you!</p>",
+        "body_text": "Hi {{customer_name}},\nWe've received your cash payment of ₹{{total_amount}} "
+                     "for order {{order_number}}. Thank you!",
+    },
+    {
+        "event": "payment_collected_admin", "audience": "admin", "enabled": True,
+        "name": "Cash Collected (Admin)",
+        "subject_template": "Cash collected: {{order_number}} — ₹{{total_amount}}",
+        "body_html": "<p>Rider <strong>{{rider_name}}</strong> collected <strong>₹{{total_amount}}</strong> "
+                     "in cash from {{customer_name}} for order <strong>{{order_number}}</strong>.</p>",
+        "body_text": "Rider {{rider_name}} collected ₹{{total_amount}} in cash from {{customer_name}} "
+                     "for order {{order_number}}.",
+    },
+    {
         "event": "weekly_summary_admin", "audience": "admin", "enabled": True,
         "name": "Weekly Summary (Admin)",
         "subject_template": "WashingBells weekly summary — {{week_range}}",
