@@ -159,7 +159,10 @@ export default function WalkInScreen() {
             text: "Print Bill",
             onPress: async () => {
               try { await printOrderInvoice(res.id, res.order_number); }
-              catch (e) { try { await shareOrderInvoice(res.id, res.order_number); } catch (_) {} }
+              catch (e) {
+                try { await shareOrderInvoice(res.id, res.order_number); }
+                catch (e2) { Alert.alert("Bill", e?.message || e2?.message || "Could not open the bill — try again from the order screen."); }
+              }
               router.replace(`/(tabs)/orders/${res.id}`);
             },
           },

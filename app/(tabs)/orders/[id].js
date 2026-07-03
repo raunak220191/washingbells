@@ -15,6 +15,8 @@ import PriceRow from "../../../components/common/PriceRow";
 import BottomBar from "../../../components/common/BottomBar";
 import api from "../../../lib/api";
 import { printInvoice, shareInvoice } from "../../../lib/invoice";
+import RazorpayCheckout from "../../../lib/RazorpayCheckout";
+import { useAuthStore } from "../../../stores/authStore";
 
 const LIFECYCLE = ["placed", "picked_up", "in_progress", "packed", "delivered"];
 const LIFECYCLE_LABELS = { placed: "Order Placed", picked_up: "Picked Up", in_progress: "In Progress", packed: "Packed & Ready", delivered: "Delivered" };
@@ -51,8 +53,10 @@ export default function OrderDetailScreen() {
   const router = useRouter();
   const { currentOrder, fetchOrder, cancelOrder } = useOrderStore();
   const addItem = useCartStore((s) => s.addItem);
+  const user = useAuthStore((s) => s.user);
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
+  const [rzCheckout, setRzCheckout] = useState(null);
   const [showReschedule, setShowReschedule] = useState(false);
   const [billLoading, setBillLoading] = useState(false);
   const [reordering, setReordering] = useState(false);
@@ -101,24 +105,63 @@ export default function OrderDetailScreen() {
     } finally { setBillLoading(false); }
   };
 
+  // Real Razorpay flow — same WebView checkout the basket uses. Works for any
+  // unpaid order (COD, pending, or a failed earlier attempt), including while
+  // the order is out for delivery.
   const handlePayNow = async () => {
     setPayLoading(true);
     try {
       const payRes = await api.post("/payments/create", { order_id: id });
+      setRzCheckout({
+        options: {
+          key: payRes.data.razorpay_key_id,
+          order_id: payRes.data.razorpay_order_id,
+          amount: payRes.data.amount,
+          currency: payRes.data.currency,
+          name: "WashingBells",
+          description: `Order ${order?.order_number || ""}`.trim(),
+          prefill: {
+            name: user?.name || "",
+            email: user?.email || "",
+            contact: (user?.phone || "").replace("+91", ""),
+          },
+        },
+      });
+    } catch (e) {
+      Alert.alert("Error", e?.response?.data?.detail || "Could not start the payment. Try again.");
+    } finally { setPayLoading(false); }
+  };
+
+  const handleRzSuccess = async (data) => {
+    setRzCheckout(null);
+    try {
       await api.post("/payments/verify", {
-        order_id: id, razorpay_order_id: payRes.data.razorpay_order_id,
-        razorpay_payment_id: `pay_dev_${Date.now()}`, razorpay_signature: "dev_signature",
+        order_id: id,
+        razorpay_order_id: data.razorpay_order_id,
+        razorpay_payment_id: data.razorpay_payment_id,
+        razorpay_signature: data.razorpay_signature,
       });
       Alert.alert("Paid!", "Payment successful.");
-      fetchOrder(id);
-    } catch (e) { Alert.alert("Error", "Payment failed. Try again."); }
-    finally { setPayLoading(false); }
+    } catch (e) {
+      Alert.alert("Payment Verification Failed", "We couldn't confirm your payment. If money was deducted it will be refunded. You can retry.");
+    } finally { fetchOrder(id); }
+  };
+
+  const handleRzDismiss = () => setRzCheckout(null);
+  const handleRzError = (msg) => {
+    setRzCheckout(null);
+    Alert.alert("Payment Failed", msg || "Something went wrong with the payment.");
   };
 
   if (loading) return (<View style={styles.center}><ActivityIndicator size="large" color={COLORS.forestGreen} /></View>);
   if (!order) return (<View style={styles.center}><Text>Order not found</Text></View>);
 
-  const isCODPending = order.payment_method === "cod" && order.payment_status === "cod_pending";
+  // Any unpaid, non-cancelled order can be paid in-app — cod_pending, pending,
+  // or a previously failed attempt (retry) — at any stage incl. out for delivery.
+  const isCODPending =
+    order.payment_status !== "paid" &&
+    !["cancelled", "rejected"].includes(order.status) &&
+    order.total_amount > 0;
   const canCancel = ["placed", "pending_payment", "confirmed"].includes(order.status);
   const canReschedule = ["placed", "pending_payment", "confirmed", "rider_assigned_pickup"].includes(order.status);
 
@@ -168,6 +211,28 @@ export default function OrderDetailScreen() {
             <View style={styles.cancelledBanner}><Ionicons name="close-circle" size={18} color={COLORS.error} /><Text style={styles.cancelledText}>Order Cancelled</Text></View>
           )}
         </View>
+
+        {/* Handover OTPs — the customer reads these out to the rider */}
+        {order.pickup_otp && !order.pickup_otp_verified && !["delivered", "cancelled", "rejected"].includes(order.status) && (
+          <View style={styles.otpCard}>
+            <Ionicons name="key-outline" size={22} color={COLORS.forestGreen} />
+            <View style={{ flex: 1, marginLeft: SPACING.md }}>
+              <Text style={styles.otpTitle}>Pickup OTP</Text>
+              <Text style={styles.otpHint}>Share this code with your rider when handing over the clothes</Text>
+            </View>
+            <Text style={styles.otpCode}>{order.pickup_otp}</Text>
+          </View>
+        )}
+        {order.delivery_otp && !order.delivery_otp_verified && !["delivered", "cancelled", "rejected"].includes(order.status) && (
+          <View style={styles.otpCard}>
+            <Ionicons name="key-outline" size={22} color={COLORS.forestGreen} />
+            <View style={{ flex: 1, marginLeft: SPACING.md }}>
+              <Text style={styles.otpTitle}>Delivery OTP</Text>
+              <Text style={styles.otpHint}>Share this code with your rider to receive your clothes</Text>
+            </View>
+            <Text style={styles.otpCode}>{order.delivery_otp}</Text>
+          </View>
+        )}
 
         {/* Agent Info */}
         {order.agent_info && (
@@ -299,6 +364,14 @@ export default function OrderDetailScreen() {
         onClose={() => setShowReschedule(false)}
         onDone={() => { setShowReschedule(false); fetchOrder(id); Alert.alert("Rescheduled", "Your pickup time has been updated."); }}
       />
+
+      <RazorpayCheckout
+        visible={!!rzCheckout}
+        options={rzCheckout?.options}
+        onSuccess={handleRzSuccess}
+        onDismiss={handleRzDismiss}
+        onError={handleRzError}
+      />
     </Screen>
   );
 }
@@ -313,6 +386,16 @@ const styles = StyleSheet.create({
   orderDate: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
   totalAmount: { fontSize: 22, fontWeight: "800", color: COLORS.black, marginTop: SPACING.sm },
   codLabel: { fontSize: 13, color: COLORS.gold, fontWeight: "600", marginTop: 4 },
+  // Handover OTP card
+  otpCard: {
+    flexDirection: "row", alignItems: "center",
+    marginHorizontal: SPACING.lg, marginBottom: SPACING.xl,
+    padding: SPACING.lg, borderRadius: RADIUS.md,
+    backgroundColor: TINTS.successBg, borderWidth: 1, borderColor: COLORS.mintGreen,
+  },
+  otpTitle: { fontSize: 14, fontWeight: "800", color: COLORS.forestGreen },
+  otpHint: { fontSize: 12, color: COLORS.textLight, marginTop: 2, lineHeight: 16 },
+  otpCode: { fontSize: 26, fontWeight: "800", color: COLORS.forestGreen, letterSpacing: 4, marginLeft: SPACING.md },
   // Timeline
   timelineRow: { flexDirection: "row", minHeight: 50 },
   timelineLeft: { width: 30, alignItems: "center" },

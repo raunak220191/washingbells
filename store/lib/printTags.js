@@ -11,7 +11,7 @@ import * as FileSystem from "expo-file-system/legacy";
 import * as SecureStore from "expo-secure-store";
 import DEV_BACKEND_URL from "../config/dev";
 
-const BASE_URL = __DEV__ ? `${DEV_BACKEND_URL}/api/v1` : "https://api.washingbells.in/api/v1";
+const BASE_URL = __DEV__ ? `${DEV_BACKEND_URL}/api/v1` : "https://api.washingbells.com/api/v1";
 
 /**
  * Download the order's tags PDF to local cache and return the file URI.
