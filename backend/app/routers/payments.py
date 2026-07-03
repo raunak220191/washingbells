@@ -93,9 +93,10 @@ async def verify_payment(
         )
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
-    # Mark as paid. Only bump a freshly-placed order to "confirmed" — paying
-    # later (e.g. while out for delivery) must NOT regress the fulfilment
-    # status, or the tracker and store/rider state machines get corrupted.
+    # Mark as paid — and ONLY paid. "confirmed" means the STORE accepted the
+    # order; flipping it here made prepaid orders skip the store's
+    # accept/reject step entirely (store UI only offers Accept on "placed").
+    # A pending_payment order does move to "placed" so it enters the queue.
     now = datetime.now(timezone.utc)
     update = {
         "payment_status": "paid",
@@ -103,8 +104,8 @@ async def verify_payment(
         "updated_at": now,
     }
     new_status = order.get("status", "placed")
-    if new_status in ("placed", "pending_payment"):
-        new_status = "confirmed"
+    if new_status == "pending_payment":
+        new_status = "placed"
         update["status"] = new_status
     await db.orders.update_one({"_id": ObjectId(request.order_id)}, {"$set": update})
 

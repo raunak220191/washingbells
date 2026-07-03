@@ -12,7 +12,7 @@ from app.schemas.phase2_schemas import (
     OTPVerifyRequest, StoreToggleRequest, StoreDeliveryTimeRequest,
     RejectOrderRequest, BookRiderRequest,
 )
-from app.services.push_service import notify_customer_order_update
+from app.services.push_service import notify_customer_order_update, notify_rider_trip_assigned
 from app.services.email_service import send_event as send_email_event
 
 RIDER_PICKUP_FEE = 40.0  # credited when the store confirms the rider's drop-off
@@ -278,6 +278,19 @@ async def reject_order(order_id: str, body: RejectOrderRequest, current_user: di
     await db.orders.update_one({"_id": ObjectId(order_id)}, {"$set": {
         "status": "rejected", "status_timeline": tl, "updated_at": now,
     }})
+    # Give the customer their money back — same semantics as customer cancel:
+    # wallet refunded, coupon use released. (Online payments need a manual
+    # Razorpay refund from the admin; flagged in the admin notification.)
+    wa = order.get("wallet_applied", 0)
+    if wa > 0:
+        await db.wallets.update_one({"user_id": order["user_id"]}, {"$inc": {"balance": wa}})
+        await db.wallet_txns.insert_one({
+            "user_id": order["user_id"], "type": "credit", "amount": wa, "reason": "refund",
+            "description": f"Refund for rejected order {order['order_number']}",
+            "order_id": order_id, "created_at": now,
+        })
+    if order.get("coupon_code"):
+        await db.coupons.update_one({"code": order["coupon_code"]}, {"$inc": {"used_count": -1}})
     # Write admin notification
     await db.notifications.insert_one({
         "type": "order_rejected",
@@ -286,13 +299,15 @@ async def reject_order(order_id: str, body: RejectOrderRequest, current_user: di
         "store_id": str(store["_id"]),
         "store_name": store["name"],
         "note": note,
+        "needs_manual_refund": order.get("payment_status") == "paid",
         "read": False,
         "created_at": now,
     })
     try:
         await notify_customer_order_update(
             order["user_id"], order["order_number"], "rejected",
-            f"Your order was rejected: {note}. We'll re-route it shortly.",
+            f"Your order was rejected: {note}."
+            + (f" ₹{wa:.0f} was returned to your wallet." if wa > 0 else ""),
         )
     except Exception: pass
     return {"message": "Order rejected", "order_number": order["order_number"]}
@@ -632,6 +647,10 @@ async def assign_pickup_rider(order_id: str, body: BookRiderRequest, current_use
         "status": "rider_assigned_pickup",
         "status_timeline": tl, "updated_at": now,
     }})
+    # Push so a backgrounded rider learns about the trip (worklist only polls in-foreground)
+    try:
+        await notify_rider_trip_assigned(str(rider["_id"]), "pickup", order["order_number"], RIDER_FEE)
+    except Exception: pass
     return {
         "message": f"Rider {rider.get('name', 'Rider')} assigned for pickup",
         "trip_id": str(trip_result.inserted_id),
@@ -723,6 +742,10 @@ async def book_rider_for_delivery(order_id: str, body: BookRiderRequest, current
         "delivery_rider_id": str(rider["_id"]),
         "status_timeline": tl, "updated_at": now,
     }})
+    # Push so a backgrounded rider learns about the trip (worklist only polls in-foreground)
+    try:
+        await notify_rider_trip_assigned(str(rider["_id"]), "delivery", order["order_number"], RIDER_FEE)
+    except Exception: pass
     return {
         "message": f"Rider {rider.get('name', 'Rider')} assigned for delivery",
         "trip_id": str(trip_result.inserted_id),

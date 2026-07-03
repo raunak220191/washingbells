@@ -8,7 +8,7 @@ import Header from "../../../components/common/Header";
 
 const SUPPORT_PHONE = "+911234567890";
 const SUPPORT_WHATSAPP = "+911234567890";
-const SUPPORT_EMAIL = "support@washingbells.in";
+const SUPPORT_EMAIL = "admin@washingbells.com";
 
 const FAQ = [
   { q: "How does pickup work?", a: "Our delivery partner will arrive at your doorstep during the selected time slot. They'll weigh your clothes, click photos, and verify pickup with your OTP." },

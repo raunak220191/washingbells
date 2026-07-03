@@ -4,31 +4,68 @@ import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS, TINTS } from "../../../constants/theme";
 import { useWalletStore } from "../../../stores/walletStore";
+import { useAuthStore } from "../../../stores/authStore";
 import Screen from "../../../components/common/Screen";
 import Header from "../../../components/common/Header";
+import RazorpayCheckout from "../../../lib/RazorpayCheckout";
 
 export default function WalletScreen() {
   const router = useRouter();
   const { balance, transactions, isLoading, fetchWallet, topup, verifyTopup } = useWalletStore();
+  const user = useAuthStore((s) => s.user);
   const [topupAmount, setTopupAmount] = useState("");
   const [topupLoading, setTopupLoading] = useState(false);
+  const [rzCheckout, setRzCheckout] = useState(null);
   const QUICK_AMOUNTS = [100, 200, 500, 1000];
 
   useEffect(() => { fetchWallet(); }, []);
 
+  // Real Razorpay flow — same WebView checkout orders use.
   const handleTopup = async (amount) => {
     const amt = amount || parseFloat(topupAmount);
     if (!amt || amt <= 0) { Alert.alert("Invalid", "Enter a valid amount"); return; }
     setTopupLoading(true);
     try {
-      // DEV: simulate payment and directly credit
-      await verifyTopup({ amount: amt, razorpay_order_id: "dev", razorpay_payment_id: "dev", razorpay_signature: "dev" });
-      Alert.alert("Success! 🎉", `₹${amt} added to your WB Wallet`);
-      setTopupAmount("");
-      fetchWallet();
+      const res = await topup(amt);
+      setRzCheckout({
+        options: {
+          key: res.razorpay_key_id,
+          order_id: res.razorpay_order_id,
+          amount: res.amount,
+          currency: res.currency,
+          name: "WashingBells",
+          description: `Wallet top-up ₹${amt}`,
+          prefill: {
+            name: user?.name || "",
+            email: user?.email || "",
+            contact: (user?.phone || "").replace("+91", ""),
+          },
+        },
+      });
     } catch (e) {
-      Alert.alert("Error", "Top-up failed. Try again.");
+      Alert.alert("Error", e?.response?.data?.detail || "Could not start the top-up. Try again.");
     } finally { setTopupLoading(false); }
+  };
+
+  const handleRzSuccess = async (data) => {
+    setRzCheckout(null);
+    try {
+      await verifyTopup({
+        razorpay_order_id: data.razorpay_order_id,
+        razorpay_payment_id: data.razorpay_payment_id,
+        razorpay_signature: data.razorpay_signature,
+      });
+      Alert.alert("Success! 🎉", "Money added to your WB Wallet");
+      setTopupAmount("");
+    } catch (e) {
+      Alert.alert("Verification Failed", "We couldn't confirm the payment. If money was deducted it will be refunded.");
+    } finally { fetchWallet(); }
+  };
+
+  const handleRzDismiss = () => setRzCheckout(null);
+  const handleRzError = (msg) => {
+    setRzCheckout(null);
+    Alert.alert("Payment Failed", msg || "Something went wrong with the payment.");
   };
 
   return (
@@ -98,6 +135,14 @@ export default function WalletScreen() {
           )}
         </View>
       </ScrollView>
+
+      <RazorpayCheckout
+        visible={!!rzCheckout}
+        options={rzCheckout?.options}
+        onSuccess={handleRzSuccess}
+        onDismiss={handleRzDismiss}
+        onError={handleRzError}
+      />
     </Screen>
   );
 }

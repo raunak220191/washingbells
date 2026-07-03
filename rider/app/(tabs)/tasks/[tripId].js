@@ -113,6 +113,10 @@ export default function ActiveTaskScreen() {
       );
       return;
     }
+    if (photos.length >= 10) {
+      Alert.alert("Limit Reached", "You can attach up to 10 photos per trip.");
+      return;
+    }
     const result = await ImagePicker.launchCameraAsync({
       quality: 0.5, base64: true, allowsEditing: false,
     });

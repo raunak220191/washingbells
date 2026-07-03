@@ -53,7 +53,10 @@ export const useTripStore = create((set, get) => ({
   },
 
   uploadPhotos: async (tripId, photos) => {
-    const res = await api.post(`/delivery/${tripId}/upload-photos`, { photos });
+    // Several base64 photos in one request take well over the default 15s on
+    // mobile data — give the upload its own generous timeout so the client
+    // doesn't abort while the server is still succeeding.
+    const res = await api.post(`/delivery/${tripId}/upload-photos`, { photos }, { timeout: 120000 });
     // Refresh worklist so photos_uploaded flag is synced (allows step restore on re-entry)
     await get().fetchWorklist();
     return res.data;

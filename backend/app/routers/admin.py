@@ -1912,7 +1912,7 @@ async def get_platform_settings(current_user: dict = Depends(get_current_user)):
         "referral_new_user_pct": settings.get("referral_new_user_pct", 10),
         "referral_referrer_pct": settings.get("referral_referrer_pct", 20),
         "support_phone": settings.get("support_phone", "+911234567890"),
-        "support_email": settings.get("support_email", "support@washingbells.in"),
+        "support_email": settings.get("support_email", "admin@washingbells.com"),
     }
 
 

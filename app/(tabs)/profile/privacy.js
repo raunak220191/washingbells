@@ -40,7 +40,7 @@ const SECTIONS = [
   },
   {
     title: "9. Your Rights",
-    body: "You have the right to: access your personal data, correct inaccurate data, request deletion of your data, opt out of promotional communications, and download your data. Contact support@washingbells.in to exercise these rights.",
+    body: "You have the right to: access your personal data, correct inaccurate data, request deletion of your data, opt out of promotional communications, and download your data. Contact admin@washingbells.com to exercise these rights.",
   },
   {
     title: "10. Children's Privacy",
@@ -52,7 +52,7 @@ const SECTIONS = [
   },
   {
     title: "12. Contact Us",
-    body: "For privacy-related inquiries:\n\nEmail: privacy@washingbells.in\nPhone: +91 12345 67890\nAddress: WashingBells Pvt. Ltd., Ludhiana, Punjab, India",
+    body: "For privacy-related inquiries:\n\nEmail: admin@washingbells.com\nPhone: +91 12345 67890\nAddress: WashingBells Pvt. Ltd., Ludhiana, Punjab, India",
   },
 ];
 

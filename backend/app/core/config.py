@@ -32,8 +32,8 @@ class Settings(BaseSettings):
     TWILIO_FROM_NUMBER: str = ""                             # +1xxxxxxxxxx fallback sender
 
     # App URLs used in invitation SMS
-    RIDER_APP_INVITE_URL: str = "https://washingbells.in/rider-app"
-    STORE_APP_INVITE_URL: str = "https://washingbells.in/store-app"
+    RIDER_APP_INVITE_URL: str = "https://washingbells.com/rider-app"
+    STORE_APP_INVITE_URL: str = "https://washingbells.com/store-app"
 
     # SendGrid (email)
     SENDGRID_API_KEY: str = ""

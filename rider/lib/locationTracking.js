@@ -18,7 +18,7 @@ import DEV_BACKEND_URL from "../config/dev";
 
 export const LOCATION_TASK_NAME = "washingbells-rider-location";
 
-const BASE_URL = __DEV__ ? `${DEV_BACKEND_URL}/api/v1` : "https://api.washingbells.in/api/v1";
+const BASE_URL = __DEV__ ? `${DEV_BACKEND_URL}/api/v1` : "https://api.washingbells.com/api/v1";
 
 // Define the background task once on module load.
 // TaskManager requires this to be defined at the JS bundle's top level so it

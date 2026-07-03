@@ -109,12 +109,23 @@ async def topup_wallet(
     current_user: dict = Depends(get_current_user),
 ):
     """Initiate wallet top-up. Returns Razorpay order for payment."""
+    db = get_db()
     amount_paise = int(body.amount * 100)
     receipt = f"wallet-{current_user['user_id'][-8:]}-{uuid.uuid4().hex[:6]}"
 
     rz_order = await create_razorpay_order(amount_paise, receipt)
     if not rz_order:
         raise HTTPException(status_code=500, detail="Could not create payment order")
+
+    # Persist the intent so verify credits the SERVER-side amount, never a
+    # client-claimed one, and so retries are idempotent.
+    await db.wallet_topups.insert_one({
+        "user_id": current_user["user_id"],
+        "razorpay_order_id": rz_order["id"],
+        "amount": float(body.amount),
+        "status": "created",
+        "created_at": datetime.now(timezone.utc),
+    })
 
     return {
         "razorpay_order_id": rz_order["id"],
@@ -130,34 +141,36 @@ async def verify_topup(
     body: dict,
     current_user: dict = Depends(get_current_user),
 ):
-    """Verify top-up payment and credit wallet."""
+    """Verify top-up payment and credit wallet (amount from the stored intent)."""
     db = get_db()
     user_id = current_user["user_id"]
 
     order_id = body.get("razorpay_order_id", "")
     payment_id = body.get("razorpay_payment_id", "")
     signature = body.get("razorpay_signature", "")
-    amount = body.get("amount", 0)  # in rupees
 
-    # Dev mode bypass
-    if settings.DEBUG and not settings.RAZORPAY_KEY_SECRET:
-        await _get_or_create_wallet(db, user_id)
-        await credit_wallet(
-            db, user_id, float(amount),
-            "top_up", f"Wallet top-up of ₹{amount} (dev mode)"
-        )
+    topup = await db.wallet_topups.find_one({"razorpay_order_id": order_id, "user_id": user_id})
+    if not topup:
+        raise HTTPException(status_code=404, detail="Top-up not found")
+    if topup.get("status") == "credited":
         wallet = await _get_or_create_wallet(db, user_id)
-        return {"message": "Wallet topped up", "balance": wallet["balance"]}
+        return {"message": "Wallet already topped up", "balance": wallet["balance"]}
 
-    # Verify signature
+    # Signature check — verify_razorpay_payment handles the dev-mock
+    # (order_dev_*) path when Razorpay isn't configured.
     is_valid = await verify_razorpay_payment(order_id, payment_id, signature)
     if not is_valid:
         raise HTTPException(status_code=400, detail="Payment verification failed")
 
+    amount = float(topup["amount"])
     await _get_or_create_wallet(db, user_id)
     await credit_wallet(
-        db, user_id, float(amount),
-        "top_up", f"Wallet top-up of ₹{amount}"
+        db, user_id, amount,
+        "top_up", f"Wallet top-up of ₹{amount:.0f}"
     )
+    await db.wallet_topups.update_one({"_id": topup["_id"]}, {"$set": {
+        "status": "credited", "razorpay_payment_id": payment_id,
+        "credited_at": datetime.now(timezone.utc),
+    }})
     wallet = await _get_or_create_wallet(db, user_id)
     return {"message": "Wallet topped up", "balance": wallet["balance"]}

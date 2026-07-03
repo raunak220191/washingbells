@@ -56,7 +56,7 @@ const SECTIONS = [
   },
   {
     title: "13. Contact",
-    body: "For questions regarding these terms, contact us at support@washingbells.in or call our helpline.",
+    body: "For questions regarding these terms, contact us at admin@washingbells.com or call our helpline.",
   },
 ];
 

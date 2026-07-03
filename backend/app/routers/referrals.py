@@ -51,7 +51,7 @@ async def get_referral_stats(current_user: dict = Depends(get_current_user)):
         "referral_code": referral_code,
         "total_referred": total_referred,
         "total_earned": total_earned,
-        "referral_url": f"https://washingbells.in/refer/{referral_code}",
+        "referral_url": f"https://washingbells.com/refer/{referral_code}",
     }
 
 
