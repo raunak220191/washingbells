@@ -135,9 +135,8 @@ export default function ActiveTaskScreen() {
   const handleGeneratePickupOTP = async () => {
     setLoading(true);
     try {
-      const res = await generatePickupOTP(tripId);
-      if (res.dev_otp) Alert.alert("DEV MODE", `OTP sent to customer.\nDev OTP: ${res.dev_otp}`);
-      else Alert.alert("OTP Sent", "An OTP has been sent to the customer's phone.");
+      await generatePickupOTP(tripId);
+      Alert.alert("OTP Sent", "The customer received an OTP in their app. Ask them for the code and enter it below.");
     } catch (e) {
       Alert.alert("Error", e?.response?.data?.detail || "Failed to generate OTP.");
     } finally { setLoading(false); }
@@ -146,9 +145,8 @@ export default function ActiveTaskScreen() {
   const handleGenerateDeliveryOTP = async () => {
     setLoading(true);
     try {
-      const res = await generateDeliveryOTP(tripId);
-      if (res.dev_otp) Alert.alert("DEV MODE", `OTP sent to customer.\nDev OTP: ${res.dev_otp}`);
-      else Alert.alert("OTP Sent", "An OTP has been sent to the customer's phone.");
+      await generateDeliveryOTP(tripId);
+      Alert.alert("OTP Sent", "The customer received an OTP in their app. Ask them for the code and enter it below.");
     } catch (e) {
       Alert.alert("Error", e?.response?.data?.detail || "Failed to generate OTP.");
     } finally { setLoading(false); }
@@ -412,6 +410,15 @@ export default function ActiveTaskScreen() {
             <Text style={styles.actionTitle}>Verify Delivery OTP</Text>
             <Text style={styles.actionDesc}>Ask the customer for the OTP sent to their phone, then confirm delivery.</Text>
 
+            {trip?.payment_status !== "paid" && (trip?.total_amount || 0) > 0 && (
+              <View style={styles.cashBanner}>
+                <Ionicons name="cash-outline" size={20} color={COLORS.gold} />
+                <Text style={styles.cashBannerText}>
+                  Collect ₹{Number(trip.total_amount).toFixed(0)} from the customer (unless they pay in the app) before confirming.
+                </Text>
+              </View>
+            )}
+
             <TouchableOpacity style={styles.secondaryBtn} onPress={handleGenerateDeliveryOTP} disabled={loading}>
               <Text style={styles.secondaryBtnText}>Send OTP to Customer</Text>
             </TouchableOpacity>
@@ -515,6 +522,12 @@ const styles = StyleSheet.create({
   },
   actionTitle: { fontSize: 18, fontWeight: "700", color: COLORS.black, marginTop: SPACING.md, marginBottom: SPACING.sm },
   actionDesc: { fontSize: 13, color: COLORS.textMuted, textAlign: "center", lineHeight: 20, marginBottom: SPACING.xl },
+  cashBanner: {
+    flexDirection: "row", alignItems: "center", alignSelf: "stretch",
+    backgroundColor: COLORS.cream, borderWidth: 1, borderColor: COLORS.gold,
+    borderRadius: RADIUS.md, padding: SPACING.md, marginBottom: SPACING.lg, gap: SPACING.sm,
+  },
+  cashBannerText: { flex: 1, fontSize: 13, color: COLORS.text, lineHeight: 18, fontWeight: "600" },
 
   primaryBtn: {
     flexDirection: "row", backgroundColor: COLORS.forestGreen,
