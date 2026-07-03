@@ -154,6 +154,9 @@ export default function CheckoutScreen() {
       return;
     }
     if (walletApplied > 0) fetchWallet();
+    // The server cleared the cart when it created the order — resync our copy
+    // so the basket tab doesn't keep showing the old items.
+    useCartStore.getState().resetLocal();
     setLoading(false);
 
     // The order is now placed. Everything below is best-effort — a payment

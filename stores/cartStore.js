@@ -79,4 +79,8 @@ export const useCartStore = create((set, get) => ({
       console.log("Clear cart error:", error.message);
     }
   },
+
+  // Local-only reset — used after checkout, where the SERVER already cleared
+  // the cart on order create; this just resyncs the app's copy.
+  resetLocal: () => set({ items: [], totalItems: 0, totalAmount: 0 }),
 }));

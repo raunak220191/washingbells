@@ -63,20 +63,18 @@ def _generate_garment_tags(order_number, items):
     return tags
 
 async def _calc_coupon_discount(db, code, subtotal, user_id):
-    if not code: return 0.0
-    c = await db.coupons.find_one({"code": code.upper(), "active": True})
-    if not c: return 0.0
-    now = datetime.now(timezone.utc)
-    # MongoDB datetimes are naive — coerce to UTC-aware before comparing.
-    valid_to = c.get("valid_to")
-    if valid_to is not None and valid_to.tzinfo is None:
-        valid_to = valid_to.replace(tzinfo=timezone.utc)
-    if valid_to and valid_to < now: return 0.0
-    if c.get("min_order", 0) > subtotal: return 0.0
-    if c.get("usage_limit") and c.get("used_count", 0) >= c["usage_limit"]: return 0.0
-    if c["type"] == "percent":
-        return min(subtotal * c["value"] / 100, c.get("max_discount", 9999))
-    return min(c["value"], subtotal)
+    """Coupon discount for customer checkout — delegates to the shared
+    evaluate_coupon (single source of truth, same as /coupons/validate and
+    admin order-create). The old duplicate here crashed on percent coupons
+    stored with max_discount=None ("no cap"). An invalid coupon is a 400 so
+    the customer is never silently charged more than the checkout showed."""
+    if not code:
+        return 0.0
+    from app.routers.coupons import evaluate_coupon
+    ev = await evaluate_coupon(db, code, subtotal, user_id)
+    if not ev["valid"]:
+        raise HTTPException(status_code=400, detail=ev["message"] or "Invalid coupon")
+    return float(ev["discount_amount"] or 0.0)
 
 def _format_order(order):
     items = [{"service_name": i["service_name"], "item_name": i["item_name"], "price": i["price"], "quantity": i["quantity"], "subtotal": i["subtotal"], "category": i.get("category", "unisex"), "unit": i.get("unit", "piece")} for i in order.get("items", [])]

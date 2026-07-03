@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { useCallback } from "react";
 import {
   View,
   Text,
@@ -8,7 +8,7 @@ import {
   Alert,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import { useRouter } from "expo-router";
+import { useRouter, useFocusEffect } from "expo-router";
 import { COLORS, SPACING, RADIUS, TYPE, ICON, FREE_DELIVERY_THRESHOLD, DELIVERY_FEE } from "../../../constants/theme";
 import { useCartStore } from "../../../stores/cartStore";
 import QuantityStepper from "../../../components/common/QuantityStepper";
@@ -22,9 +22,9 @@ export default function BasketScreen() {
   const router = useRouter();
   const { items, totalItems, totalAmount, fetchCart, updateItem, removeItem, clearCart, isLoading } = useCartStore();
 
-  useEffect(() => {
-    fetchCart();
-  }, []);
+  // Refetch on every focus (tab screens stay mounted, so a mount-only effect
+  // showed a stale basket after checkout cleared the server cart).
+  useFocusEffect(useCallback(() => { fetchCart(); }, []));
 
   const deliveryFee = totalAmount >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
   const grandTotal = totalAmount + deliveryFee;
