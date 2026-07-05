@@ -48,6 +48,36 @@ test this round) · NEEDS-REPRO (could not reproduce; notes attached).
 | C1 | ✅ root-caused; ⚠️ needs client's Twilio creds to complete | Hard evidence from prod (gcloud): the Cloud Run service has **no Twilio env/secrets at all** — only stale MSG91 config from the replaced provider — and runs `OTP_DEV_BYPASS=true`. Consequence: **no OTP SMS has ever been sent from production** (matches "worked May 21" — that was a different setup), and any phone number could be logged into with the hardcoded `123456` (account-takeover hole). The bypass now also requires `DEBUG=true`, so prod can never accept `123456` again. The Twilio auth token stored locally returns **401** (rotated/revoked) — a fresh token from the client's Twilio console is required. Deployment steps (see release checklist): create secrets `twilio-account-sid/auth-token/verify-service-sid`, bind to Cloud Run, set `OTP_DEV_BYPASS=false`, verify India SMS geo-permission in the Twilio console. All three apps' release builds correctly point at `api.washingbells.com` (checked). Twilio API responses were already logged; unconfigured state now logs loudly. | `test_c1_otp_auth.py` | 203eb0e |
 | C2 | ✅ | Two findings: (a) with C1, testers never received a code, so every verify attempt bounced them back — fixed via C1; (b) the root auth guard redirected authenticated users out of EVERY auth screen including **onboarding**, so a new user's registration (name/email) was skipped/never completed. Onboarding is now exempt from the redirect. Login/verify/resend errors were already surfaced as alerts, not silent loops. | `test_c1_otp_auth.py` (new + existing user paths) | 203eb0e |
 
+## Phase D — Super Admin Panel
+
+| ID | Status | Fix / Evidence | Test | Commits |
+|----|--------|----------------|------|---------|
+| D1 | ✅ | Order bill editing already existed (EditBillModal → PUT /admin/orders/{id}/bill with item CRUD, coupon+manual discount, audit trail). Added the missing piece: **Reschedule** modal editing pickup AND delivery slots via PUT /orders/{id}/reschedule. | existing bill tests + `test_d_admin_crud.py` | 2855cca, 3551f55 |
+| D2 | ✅ | Admin address CRUD endpoints (add/edit/delete, geocode fallback, audited) + editable addresses UI in the customer drawer. | `test_d_admin_crud.py` | 2855cca, 3551f55 |
+| D3 | ☑ | Rider profile edit existed (PUT /admin/riders/{id} + UI). | — | earlier |
+| D4 | ✅ | Store edit had radius/hours/coords; now also settlement + per-store fee overrides (see D9/D10). | `test_d_admin_crud.py` | 2855cca, 3551f55 |
+| D5 | ✅ | PUT /admin/users/{id}/credentials — bcrypt reset + `token_version` bump; access AND refresh tokens minted earlier are rejected (true forced re-login). Reset Password modal on customers/riders/stores. | `test_d_admin_crud.py::test_d5*` | 2855cca, 3551f55 |
+| D6 | ☑ | Standalone "Add customer" existed (POST /admin/customers + modal). | — | earlier |
+| D7 | ☑ | Coupon selector in admin order create existed; verified same evaluate_coupon as the app. | `test_a5_coupons.py` | earlier |
+| D8 | ☑ | Optional max_discount existed end-to-end; the A5 fix made uncapped coupons LISTABLE too. | `test_a5_coupons.py` | 8aebb79 |
+| D9 | ✅ | New `upi_id` + bank fields editable from admin store profile AND settable by the store owner; payouts screen shows UPI. Razorpay Route mapping documented in release notes (per-store settlement would use linked accounts — needs Razorpay dashboard setup). | `test_d_admin_crud.py` | 2855cca, 3551f55 |
+| D10 | ✅ | **Settings now actually drive money**: global delivery fee / free-delivery threshold / new flat platform fee + per-store overrides applied in every order path (customer, admin, walk-in, bill edit). Previously the Settings page edited values nothing read (hardcoded ₹40/₹299). Checkout fetches /stores/fees-config for display; platform fee is its own bill line. Empty override clears to global. | `test_d_admin_crud.py::test_d10*` | 2855cca, 3551f55 |
+| D11 | ✅ | Notification-center writes added for new_order, payment_received, order_cancelled (accept/reject existed); bell badge + list already present. | `test_d_admin_crud.py::test_d11*` | 2855cca |
+| D12 | ✅ | Admin order create accepts real pickup + delivery slots (UI pickers; delivery defaults to pickup+2 days, never a copy). | `test_d_admin_crud.py::test_d12*` | 2855cca, 3551f55 |
+| D13 | ✅ | Timing (pay now / on delivery) and instrument (UPI/card/cash) are separate selectors in BOTH admin (existed) and customer checkout (new); backend stores both fields, timing wins over legacy payment_method. | `test_d13_payment_timing.py` | 36130b6 |
+
+## Phase E — Store App
+
+| ID | Status | Fix / Evidence | Test | Commits |
+|----|--------|----------------|------|---------|
+| E1 | ☑ | Walk-in bill generation verified end-to-end (order → GST PDF); the Android failure was the expo-file-system legacy-entry bug fixed earlier + the SendGrid event-loop freeze (b00004d) that made bill requests time out. | `test_a6_invoice_pdf.py` | earlier, b00004d |
+| E2 | ☑ | Print-tag/GST taps: handlers are try/caught and the tags/GST PDFs verified via API; the crash matched the pre-legacy-fix builds. Device regression pass queued in the verification matrix. | `test_e_store_billing.py::test_e2*` | 131beab |
+| E3 | ✅ | Deterministic order everywhere + admin-controllable `sort_order` on services and items (PUT accepts it). | `test_e_store_billing.py::test_e3*` | 131beab |
+| E4 | ✅ | Walk-in bill: direct numeric entry (not just steppers), Bill card with per-line edit/remove, same item freely re-added. | UI (babel-verified; device pass queued) | c156bf1 |
+| E5 | ✅ | Coupon + percent-discount fields in store billing; server validates coupon with the shared evaluator; discount capped at subtotal. | `test_e_store_billing.py::test_e5*` | 131beab, c156bf1 |
+| E6 | ✅ | Fractional weights to 0.1 kg across customer cart (float quantities; whole-number rule kept for piece services), walk-in (0.5 steps + decimal input), admin orders (already float), pricing = weight × rate. Basket badge counts a kg line as one item. | `test_e_store_billing.py::test_e6*` | 131beab, c156bf1 |
+| E7 | ✅ decided+implemented | Deliberate choice documented: phone-first layout retained; on iPad the dashboard/orders/billing render as a centered 700pt column (TabletContainer) instead of a stretched phone screen. Full adaptive layouts deferred. | — | c156bf1 |
+
 ### Platform caveats (per cross-platform rule)
 
 Backend fixes are platform-independent. Client-side changes (checkout delivery
