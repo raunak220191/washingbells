@@ -118,6 +118,7 @@ def _format_order(order):
         assigned_agent_id=order.get("assigned_agent_id"),
         agent_info=order.get("agent_info"),
         subtotal=order["subtotal"], delivery_fee=order["delivery_fee"],
+        platform_fee_charged=order.get("platform_fee_charged", 0.0),
         discount=order["discount"], wallet_applied=order.get("wallet_applied", 0.0),
         total_amount=order["total_amount"], coupon_code=order.get("coupon_code"),
         razorpay_order_id=order.get("razorpay_order_id"),
@@ -141,14 +142,18 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     if not address:
         raise HTTPException(status_code=404, detail="Address not found")
     subtotal = cart_response.total_amount
-    delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else DELIVERY_FEE
+    # D10: fees come from admin Settings (+ per-store overrides), not constants
+    from app.services.fee_service import get_fee_config, delivery_fee_for
+    fee_cfg = await get_fee_config(db, order_data.store_id)
+    delivery_fee = delivery_fee_for(fee_cfg, subtotal)
+    platform_fee = fee_cfg["platform_fee"]
     discount = await _calc_coupon_discount(db, order_data.coupon_code, subtotal, user_id)
     wallet_applied = 0.0
     if order_data.wallet_amount > 0:
         w = await db.wallets.find_one({"user_id": user_id})
         avail = w["balance"] if w else 0.0
-        wallet_applied = min(order_data.wallet_amount, avail, subtotal + delivery_fee - discount)
-    total_amount = max(round(subtotal + delivery_fee - discount - wallet_applied, 2), 0)
+        wallet_applied = min(order_data.wallet_amount, avail, subtotal + delivery_fee + platform_fee - discount)
+    total_amount = max(round(subtotal + delivery_fee + platform_fee - discount - wallet_applied, 2), 0)
     pm = order_data.payment_method or "online"
     # A3: an online order with money still due starts as pending_payment and
     # alerts nobody until Razorpay confirms (verify or webhook). COD and
@@ -187,7 +192,8 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         "delivery_otp": None, "delivery_otp_verified": False, "delivered_at": None,
         "store_payout": 0.0, "platform_fee": 0.0, "rider_pickup_fee": 0.0, "rider_delivery_fee": 0.0,
         "customer_rating": None, "customer_review": None,
-        "subtotal": subtotal, "delivery_fee": delivery_fee, "discount": round(discount, 2),
+        "subtotal": subtotal, "delivery_fee": delivery_fee,
+        "platform_fee_charged": round(platform_fee, 2), "discount": round(discount, 2),
         "wallet_applied": round(wallet_applied, 2), "total_amount": total_amount,
         "coupon_code": order_data.coupon_code.upper() if order_data.coupon_code else None,
         "razorpay_order_id": None, "created_at": now, "updated_at": now,
@@ -352,6 +358,13 @@ async def cancel_order(order_id: str, current_user: dict = Depends(get_current_u
     if wa > 0:
         await db.wallets.update_one({"user_id": order["user_id"]}, {"$inc": {"balance": wa}})
         await db.wallet_txns.insert_one({"user_id": order["user_id"], "type": "credit", "amount": wa, "reason": "refund", "description": f"Refund for cancelled order {order['order_number']}", "order_id": order_id, "created_at": now})
+    # D11: cancellations surface in the admin notification center
+    from app.services.order_notify_service import write_admin_notification
+    await write_admin_notification(
+        db, type="order_cancelled", order=order,
+        note=f"Cancelled by customer ({order.get('payment_status')})"
+             + (" — Razorpay refund may be needed" if order.get("payment_status") == "paid" else ""),
+    )
     updated = await db.orders.find_one({"_id": ObjectId(order_id)})
     return _format_order(updated)
 

@@ -201,6 +201,8 @@ class OrderResponse(BaseModel):
     agent_info: Optional[dict] = None
     subtotal: float
     delivery_fee: float
+    # D10: flat customer-facing platform fee (0 unless enabled in admin Settings)
+    platform_fee_charged: float = 0.0
     discount: float
     wallet_applied: float = 0.0
     total_amount: float

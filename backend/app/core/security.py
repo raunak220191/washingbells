@@ -90,4 +90,21 @@ async def get_current_user(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid token payload",
         )
+    # D5 forced re-login: an admin credential reset bumps the user's
+    # token_version, invalidating every token minted before it. Tokens and
+    # users without the field are version 0, so behavior is unchanged until
+    # the first reset.
+    from bson import ObjectId
+    from app.core.database import get_db
+    try:
+        user = await get_db().users.find_one(
+            {"_id": ObjectId(user_id)}, {"token_version": 1}
+        )
+    except Exception:
+        user = None
+    if user is None or payload.get("tv", 0) != user.get("token_version", 0):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Session expired. Please log in again.",
+        )
     return {"user_id": user_id, "phone": payload.get("phone"), "role": payload.get("role", "customer")}

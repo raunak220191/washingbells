@@ -28,6 +28,9 @@ def _token_payload(user: dict) -> dict:
     return {
         "user_id": str(user["_id"]), "phone": user["phone"],
         "role": user.get("role", "customer"),
+        # D5: token_version — bumped by an admin credential reset to force
+        # re-login; get_current_user rejects tokens with a stale version.
+        "tv": user.get("token_version", 0),
     }
 
 
@@ -142,6 +145,12 @@ async def refresh_endpoint(request: RefreshRequest):
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User no longer exists")
 
+    # D5: a credential reset bumps token_version — refresh tokens minted
+    # before the reset must die too, or the forced re-login is theater.
+    if payload.get("tv", 0) != user.get("token_version", 0):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Session expired. Please log in again.")
+
     # Re-issue from the current user record so a role change propagates.
     new_payload = _token_payload(user)
     return RefreshResponse(
@@ -191,7 +200,7 @@ async def register_rider(body: RiderRegisterRequest, current_user: dict = Depend
     if body.email:
         update_fields["email"] = body.email.strip().lower()
     await db.users.update_one({"_id": user["_id"]}, {"$set": update_fields})
-    token = create_access_token(data={"user_id": str(user["_id"]), "phone": user["phone"], "role": "rider"})
+    token = create_access_token(data={"user_id": str(user["_id"]), "phone": user["phone"], "role": "rider", "tv": user.get("token_version", 0)})
     return {"message": "Rider registration submitted. Awaiting admin approval.", "access_token": token, "rider_approved": False}
 
 
@@ -224,7 +233,7 @@ async def register_store(body: StoreRegisterRequest, current_user: dict = Depend
     await db.users.update_one({"_id": user["_id"]}, {"$set": {
         "role": "store_owner", "store_id": str(result.inserted_id), "updated_at": now,
     }})
-    token = create_access_token(data={"user_id": str(user["_id"]), "phone": user["phone"], "role": "store_owner"})
+    token = create_access_token(data={"user_id": str(user["_id"]), "phone": user["phone"], "role": "store_owner", "tv": user.get("token_version", 0)})
 
     # Email all admin recipients that a new store is awaiting approval (non-blocking)
     try:

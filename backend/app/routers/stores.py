@@ -60,6 +60,15 @@ async def list_stores():
     return [_format_store(s) for s in stores]
 
 
+@router.get("/fees-config")
+async def get_fees_config(store_id: str = Query(None, description="Optional store for per-store overrides")):
+    """Effective delivery/platform fees for checkout display (D10). The
+    server recomputes these at order time — this is display-only. Declared
+    before /{store_id} so 'fees-config' isn't swallowed as a store id."""
+    from app.services.fee_service import get_fee_config
+    return await get_fee_config(get_db(), store_id)
+
+
 @router.get("/nearby", response_model=list[NearbyStoreResponse])
 async def get_nearby_stores(
     lat: float = Query(..., description="Customer latitude"),

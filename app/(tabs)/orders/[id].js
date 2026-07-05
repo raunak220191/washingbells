@@ -295,6 +295,9 @@ export default function OrderDetailScreen() {
           <Text style={styles.sectionTitle}>Billing</Text>
           <PriceRow label="Subtotal" value={order.subtotal} />
           <PriceRow label="Delivery" value={order.delivery_fee} free={order.delivery_fee === 0} />
+          {(order.platform_fee_charged || 0) > 0 && (
+            <PriceRow label="Platform fee" value={order.platform_fee_charged} />
+          )}
           {order.discount > 0 && (
             <PriceRow label="Discount" value={`-₹${order.discount.toFixed(2)}`} positive />
           )}

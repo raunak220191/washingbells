@@ -34,6 +34,24 @@ def dispatch(coro) -> None:
     task.add_done_callback(_background_tasks.discard)
 
 
+async def write_admin_notification(db, *, type: str, order: dict, note: str) -> None:
+    """D11: persist an event into the admin notification center (bell/list).
+    Same doc shape as the existing accept/reject writes. Never raises."""
+    try:
+        await db.notifications.insert_one({
+            "type": type,
+            "order_id": str(order["_id"]),
+            "order_number": order.get("order_number"),
+            "store_id": order.get("store_id"),
+            "store_name": None,
+            "note": note,
+            "read": False,
+            "created_at": datetime.now(timezone.utc),
+        })
+    except Exception:
+        pass
+
+
 async def send_new_order_notifications(db, order: dict) -> bool:
     """Push + email fan-out for a newly confirmed (payable) order.
 
@@ -116,6 +134,11 @@ async def send_new_order_notifications(db, order: dict) -> bool:
         except Exception:
             pass
 
+    await write_admin_notification(
+        db, type="new_order", order=order,
+        note=f"New order from {customer_name} — ₹{order['total_amount']:.0f}",
+    )
+
     try:
         await send_event_to_admins("new_order_admin", order_id=str(order["_id"]), context={
             "order_number": order["order_number"],
@@ -167,5 +190,9 @@ async def confirm_order_paid(db, order: dict, payment_id: str | None, via: str) 
     )
     if res.modified_count:
         fresh = await db.orders.find_one({"_id": order["_id"]})
+        await write_admin_notification(
+            db, type="payment_received", order=fresh,
+            note=f"Payment received ({via}) — ₹{fresh['total_amount']:.0f}",
+        )
         dispatch(send_new_order_notifications(db, fresh))
     return new_status

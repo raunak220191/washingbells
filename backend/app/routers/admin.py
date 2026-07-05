@@ -358,7 +358,9 @@ async def admin_edit_order_bill(order_id: str, body: dict, current_user: dict = 
     subtotal = round(sum(li["subtotal"] for li in line_items), 2)
     fulfillment_mode = order.get("fulfillment_mode", "counter_pickup")
     if fulfillment_mode == "rider_delivery":
-        delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else DELIVERY_FEE
+        from app.services.fee_service import get_fee_config, delivery_fee_for
+        _fee_cfg = await get_fee_config(db, order.get("store_id"))
+        delivery_fee = delivery_fee_for(_fee_cfg, subtotal)
     else:
         delivery_fee = 0.0
 
@@ -705,7 +707,9 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
 
     subtotal = round(sum(li["subtotal"] for li in line_items), 2)
     if fulfillment_mode == "rider_delivery":
-        delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else DELIVERY_FEE
+        from app.services.fee_service import get_fee_config, delivery_fee_for
+        _fee_cfg = await get_fee_config(db, str(store["_id"]) if isinstance(store, dict) else None)
+        delivery_fee = delivery_fee_for(_fee_cfg, subtotal)
     else:
         delivery_fee = 0.0
 
@@ -801,12 +805,21 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
         {"status": "placed", "timestamp": now.isoformat(), "note": "Order created by admin"},
         {"status": "at_store", "timestamp": now.isoformat(), "note": "Garments received"},
     ]
-    slot = {"date": now.strftime("%Y-%m-%d"), "slot": "Admin"}
+    # D12: admin can supply real slots; delivery is DISTINCT from pickup
+    # (default: pickup today, delivery +2 days — the standard turnaround).
+    def _slot_from(body_key, default_date):
+        s = body.get(body_key) or {}
+        date_str = (s.get("date") or default_date).strip()
+        label = (s.get("slot") or "Admin").strip()
+        return {"date": date_str, "slot": label}
+    from datetime import timedelta as _td
+    pickup_slot = _slot_from("pickup_slot", now.strftime("%Y-%m-%d"))
+    delivery_slot = _slot_from("delivery_slot", (now + _td(days=2)).strftime("%Y-%m-%d"))
 
     order_doc = {
         "order_number": order_number, "user_id": user_id,
         "items": line_items, "address": address,
-        "pickup_slot": slot, "delivery_slot": slot,
+        "pickup_slot": pickup_slot, "delivery_slot": delivery_slot,
         "special_instructions": body.get("special_instructions"),
         "payment_method": payment_method, "payment_timing": payment_timing,
         "status": "at_store", "payment_status": payment_status,
@@ -1828,6 +1841,121 @@ async def admin_update_user(user_id: str, body: dict, current_user: dict = Depen
     return {"id": user_id, "message": "User updated"}
 
 
+@router.put("/users/{user_id}/credentials")
+async def admin_reset_credentials(user_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """D5: super-admin resets any user's password (customer / rider / store
+    owner). Stores a bcrypt hash and bumps token_version so every existing
+    session (access + refresh tokens) is invalidated — forced re-login."""
+    from app.core.security import hash_password
+    _require_admin(current_user)
+    db = get_db()
+    password = (body.get("password") or "").strip()
+    if len(password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    try:
+        user = await db.users.find_one({"_id": ObjectId(user_id)})
+    except Exception:
+        user = None
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    await db.users.update_one({"_id": user["_id"]}, {
+        "$set": {"password_hash": hash_password(password),
+                 "updated_at": datetime.now(timezone.utc)},
+        "$inc": {"token_version": 1},
+    })
+    await _audit_edit(db, current_user, "users", user_id,
+                      {"credentials": "old"}, {"credentials": "password reset + sessions revoked"})
+    who = user.get("name") or user.get("phone")
+    return {"id": user_id, "message": f"Password reset for {who}. All their sessions were signed out."}
+
+
+@router.post("/users/{user_id}/addresses")
+async def admin_add_user_address(user_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """D2: super-admin adds an address to a customer profile."""
+    _require_admin(current_user)
+    db = get_db()
+    if not (body.get("full_address") and body.get("city")):
+        raise HTTPException(status_code=400, detail="full_address and city are required")
+    lat, lng = body.get("latitude"), body.get("longitude")
+    if not lat or not lng:
+        from app.services.geocoding_service import geocode_address
+        coords = await geocode_address(body.get("full_address"), body.get("city"), body.get("pincode"))
+        lat, lng = coords if coords else (None, None)
+    doc = {
+        "user_id": user_id,
+        "label": body.get("label", "home"),
+        "full_address": body["full_address"].strip(),
+        "landmark": (body.get("landmark") or "").strip() or None,
+        "latitude": lat, "longitude": lng,
+        "city": body["city"].strip(),
+        "state": (body.get("state") or "").strip() or "Punjab",
+        "pincode": (body.get("pincode") or "").strip(),
+        "is_default": bool(body.get("is_default")),
+        "created_at": datetime.now(timezone.utc),
+    }
+    if doc["is_default"]:
+        await db.addresses.update_many({"user_id": user_id}, {"$set": {"is_default": False}})
+    result = await db.addresses.insert_one(doc)
+    await _audit_edit(db, current_user, "addresses", str(result.inserted_id), {}, {"created": doc["full_address"]})
+    return {"id": str(result.inserted_id), "message": "Address added"}
+
+
+@router.put("/users/{user_id}/addresses/{address_id}")
+async def admin_update_user_address(user_id: str, address_id: str, body: dict, current_user: dict = Depends(get_current_user)):
+    """D2: super-admin edits a customer's address; re-geocodes when the text
+    changes and no fresh coordinates are supplied."""
+    _require_admin(current_user)
+    db = get_db()
+    try:
+        addr = await db.addresses.find_one({"_id": ObjectId(address_id), "user_id": user_id})
+    except Exception:
+        addr = None
+    if not addr:
+        raise HTTPException(status_code=404, detail="Address not found")
+
+    updates = {}
+    for f in ("label", "full_address", "landmark", "city", "state", "pincode"):
+        if f in body and body[f] is not None:
+            updates[f] = str(body[f]).strip()
+    for f in ("latitude", "longitude"):
+        if body.get(f) not in (None, ""):
+            try:
+                updates[f] = float(body[f])
+            except (TypeError, ValueError):
+                pass
+    if "is_default" in body:
+        updates["is_default"] = bool(body["is_default"])
+        if updates["is_default"]:
+            await db.addresses.update_many({"user_id": user_id}, {"$set": {"is_default": False}})
+    if not updates:
+        raise HTTPException(status_code=400, detail="Nothing to update")
+    if updates.get("full_address") and "latitude" not in updates:
+        from app.services.geocoding_service import geocode_address
+        coords = await geocode_address(updates["full_address"],
+                                       updates.get("city", addr.get("city")),
+                                       updates.get("pincode", addr.get("pincode")))
+        if coords:
+            updates["latitude"], updates["longitude"] = coords
+
+    before = {k: addr.get(k) for k in updates}
+    await db.addresses.update_one({"_id": addr["_id"]}, {"$set": updates})
+    await _audit_edit(db, current_user, "addresses", address_id, before, updates)
+    return {"id": address_id, "message": "Address updated"}
+
+
+@router.delete("/users/{user_id}/addresses/{address_id}")
+async def admin_delete_user_address(user_id: str, address_id: str, current_user: dict = Depends(get_current_user)):
+    """D2: super-admin removes a customer's address."""
+    _require_admin(current_user)
+    db = get_db()
+    result = await db.addresses.delete_one({"_id": ObjectId(address_id), "user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Address not found")
+    await _audit_edit(db, current_user, "addresses", address_id, {"deleted": False}, {"deleted": True})
+    return {"message": "Address deleted"}
+
+
 @router.put("/riders/{rider_id}")
 async def admin_update_rider(rider_id: str, body: dict, current_user: dict = Depends(get_current_user)):
     """Super-admin edits a rider profile (name, email, phone, vehicle, approval)."""
@@ -1881,10 +2009,15 @@ async def admin_update_store(store_id: str, body: dict, current_user: dict = Dep
 
     updates = {}
     for f in ["name", "address", "city", "state", "pincode", "phone", "whatsapp",
-              "opening_time", "closing_time", "status"]:
+              "opening_time", "closing_time", "status",
+              # D9: settlement details — where this store's online payments
+              # are paid out. Referenced by the admin payouts screen.
+              "upi_id", "bank_account_number", "bank_ifsc", "bank_account_holder"]:
         if f in body:
             updates[f] = body[f]
-    for f in ["latitude", "longitude", "geo_radius_km"]:
+    for f in ["latitude", "longitude", "geo_radius_km",
+              # D10 per-store fee overrides (empty string clears -> handled below)
+              "delivery_fee_override", "free_delivery_threshold_override", "platform_fee_override"]:
         if body.get(f) not in (None, ""):
             try:
                 updates[f] = float(body[f])
@@ -1995,7 +2128,7 @@ async def update_platform_settings(body: dict, current_user: dict = Depends(get_
     """Update platform settings."""
     _require_admin(current_user)
     db = get_db()
-    allowed = ["delivery_fee", "free_delivery_threshold", "platform_commission_pct",
+    allowed = ["delivery_fee", "free_delivery_threshold", "platform_fee", "platform_commission_pct",
                "rider_pickup_fee", "rider_delivery_fee", "min_order_value",
                "express_surcharge_pct", "referral_new_user_pct", "referral_referrer_pct",
                "support_phone", "support_email"]

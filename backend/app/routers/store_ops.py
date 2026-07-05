@@ -94,6 +94,7 @@ async def get_my_store(current_user: dict = Depends(get_current_user)):
         "profile_complete": store.get("profile_complete", True),
         "store_photos": store.get("store_photos", []),
         "gst_number": store.get("gst_number"),
+        "upi_id": store.get("upi_id"),
         "bank_account_number": store.get("bank_account_number"),
         "bank_ifsc": store.get("bank_ifsc"),
         "bank_account_holder": store.get("bank_account_holder"),
@@ -116,7 +117,7 @@ async def complete_store_profile(body: dict, current_user: dict = Depends(get_cu
 
     # Merge any provided fields
     for k in ("address", "city", "pincode", "phone", "opening_time", "closing_time", "gst_number",
-              "bank_account_number", "bank_ifsc", "bank_account_holder"):
+              "upi_id", "bank_account_number", "bank_ifsc", "bank_account_holder"):
         if k in body and body[k] is not None:
             update[k] = body[k]
     if "latitude" in body and "longitude" in body and body["latitude"] is not None:
@@ -921,7 +922,9 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
 
     # Delivery fee only applies when finished goods go out via rider
     if fulfillment_mode == "rider_delivery":
-        delivery_fee = 0.0 if subtotal >= FREE_DELIVERY_THRESHOLD else DELIVERY_FEE
+        from app.services.fee_service import get_fee_config, delivery_fee_for
+        _fee_cfg = await get_fee_config(db, str(store["_id"]))
+        delivery_fee = delivery_fee_for(_fee_cfg, subtotal)
     else:
         delivery_fee = 0.0
     total_amount = round(subtotal + delivery_fee, 2)

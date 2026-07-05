@@ -219,9 +219,23 @@ export default function CheckoutScreen() {
       .finally(() => setDeliverySlotsLoading(false));
   }, [selectedStore?.id, deliveryDate]);
 
-  const deliveryFee = totalAmount >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
+  // D10: fees come from admin Settings (+ per-store overrides). Fetched for
+  // display; the server recomputes at order time. Constants are the fallback
+  // while loading / offline.
+  const [feeCfg, setFeeCfg] = useState(null);
+  useEffect(() => {
+    api
+      .get("/stores/fees-config", { params: selectedStore?.id ? { store_id: selectedStore.id } : {} })
+      .then((res) => setFeeCfg(res.data))
+      .catch(() => setFeeCfg(null));
+  }, [selectedStore?.id]);
+
+  const freeThreshold = feeCfg?.free_delivery_threshold ?? FREE_DELIVERY_THRESHOLD;
+  const baseDeliveryFee = feeCfg?.delivery_fee ?? DELIVERY_FEE;
+  const platformFee = feeCfg?.platform_fee ?? 0;
+  const deliveryFee = totalAmount >= freeThreshold ? 0 : baseDeliveryFee;
   const discount = validationResult?.valid ? validationResult.discount_amount : 0;
-  const payableBeforeWallet = Math.max(totalAmount + deliveryFee - discount, 0);
+  const payableBeforeWallet = Math.max(totalAmount + deliveryFee + platformFee - discount, 0);
   // Wallet can cover up to the remaining payable amount.
   const walletApplied = useWallet ? Math.min(walletBalance || 0, payableBeforeWallet) : 0;
   const grandTotal = Math.max(payableBeforeWallet - walletApplied, 0);
@@ -624,6 +638,7 @@ export default function CheckoutScreen() {
           <Text style={styles.sectionTitle}>Order Summary</Text>
           <PriceRow label={`Items (${totalItems})`} value={totalAmount} />
           <PriceRow label="Delivery" value={deliveryFee} free={deliveryFee === 0} />
+          {platformFee > 0 && <PriceRow label="Platform fee" value={platformFee} />}
           {discount > 0 && (
             <PriceRow label="Discount" value={`-₹${discount.toFixed(2)}`} positive />
           )}
