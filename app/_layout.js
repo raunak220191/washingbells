@@ -50,8 +50,12 @@ export default function RootLayout() {
       if (route !== "(authenticate)/terms") router.replace("/(authenticate)/terms");
       return;
     }
-    // All clear → into the app
-    if (inAuthGroup) router.replace("/(tabs)/home");
+    // All clear → into the app. Onboarding is exempt: it runs AFTER auth for
+    // new users, and this guard used to yank them straight to home before
+    // they could enter their name/email (C2 — registration never completed).
+    if (inAuthGroup && route !== "(authenticate)/onboarding") {
+      router.replace("/(tabs)/home");
+    }
   }, [isAuthenticated, isLoading, segments, termsChecked, needsTerms]);
 
   if (isLoading) {

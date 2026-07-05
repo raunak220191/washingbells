@@ -42,6 +42,21 @@ def _is_configured() -> bool:
     )
 
 
+def _dev_bypass_active() -> bool:
+    """The 123456 bypass is a LOCAL DEV convenience only (C1).
+
+    Production ran with OTP_DEV_BYPASS=true and no Twilio credentials: no SMS
+    was ever sent ('OTP not working'), while any phone number could be logged
+    into with the hardcoded 123456 — an account-takeover hole. Requiring
+    DEBUG too means a prod deployment can never silently accept 123456."""
+    if settings.OTP_DEV_BYPASS and not settings.DEBUG:
+        logger.warning(
+            "OTP_DEV_BYPASS is set but DEBUG is off — bypass REFUSED. "
+            "Configure TWILIO_* credentials for real OTP delivery."
+        )
+    return settings.OTP_DEV_BYPASS and settings.DEBUG
+
+
 def _auth() -> tuple[str, str]:
     return (settings.TWILIO_ACCOUNT_SID, settings.TWILIO_AUTH_TOKEN)
 
@@ -64,10 +79,10 @@ def _to_e164(phone: str) -> str:
 async def send_otp(phone: str) -> bool:
     """Start a Twilio Verify verification (SMS channel), or use the dev bypass."""
     if not _is_configured():
-        if settings.OTP_DEV_BYPASS:
+        if _dev_bypass_active():
             logger.info(f"[DEV BYPASS] OTP for {phone} → use code: {DEV_OTP}")
             return True
-        logger.error("OTP requested but Twilio is not configured and OTP_DEV_BYPASS is off")
+        logger.error("OTP requested but Twilio is not configured (set TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN / TWILIO_VERIFY_SERVICE_SID)")
         return False
 
     to = _to_e164(phone)
@@ -92,7 +107,7 @@ async def send_otp(phone: str) -> bool:
 async def verify_otp(phone: str, code: str) -> bool:
     """Check an OTP via Twilio Verify VerificationCheck, or use the dev bypass."""
     if not _is_configured():
-        return settings.OTP_DEV_BYPASS and code == DEV_OTP
+        return _dev_bypass_active() and code == DEV_OTP
 
     to = _to_e164(phone)
     try:
