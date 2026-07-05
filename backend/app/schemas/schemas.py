@@ -65,8 +65,10 @@ class AddressCreate(BaseModel):
     label: str = Field(..., description="e.g. Home, Work, Other")
     full_address: str
     landmark: Optional[str] = None
-    latitude: float
-    longitude: float
+    # B2: optional — filled from GPS/on-device geocode by the app, else the
+    # server geocodes the typed address. Never typed by the customer.
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     city: str
     state: str = "Punjab"
     pincode: str
@@ -91,8 +93,8 @@ class AddressResponse(BaseModel):
     label: str
     full_address: str
     landmark: Optional[str] = None
-    latitude: float
-    longitude: float
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
     city: str
     state: str
     pincode: str

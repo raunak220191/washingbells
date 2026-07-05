@@ -269,12 +269,30 @@ export default function AddressScreen() {
   const handleSave = async () => {
     if (!validateForm()) return;
 
+    // B2: never invent coordinates. GPS (if captured) wins; otherwise geocode
+    // the typed address on-device; otherwise send nulls and let the server
+    // geocode. The old `|| 30.9` default silently pinned every no-GPS address
+    // to Ludhiana, which broke store matching for everyone else.
+    let lat = latitude || null;
+    let lng = longitude || null;
+    if (!lat || !lng) {
+      try {
+        const results = await Location.geocodeAsync(
+          `${fullAddress.trim()}, ${city.trim()} ${pincode.trim()}`
+        );
+        if (results?.length && results[0]?.latitude != null) {
+          lat = results[0].latitude;
+          lng = results[0].longitude;
+        }
+      } catch {}
+    }
+
     const data = {
       label,
       full_address: fullAddress.trim(),
       landmark: landmark.trim() || null,
-      latitude: latitude || 30.9,
-      longitude: longitude || 75.85,
+      latitude: lat,
+      longitude: lng,
       city: city.trim(),
       state: state.trim() || "Punjab",
       pincode: pincode.trim(),

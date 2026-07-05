@@ -760,17 +760,25 @@ async def admin_create_order(body: dict, current_user: dict = Depends(get_curren
     discount = round(min(coupon_discount + manual_discount, subtotal), 2)
     total_amount = round(subtotal + delivery_fee - discount, 2)
 
-    # Address — only the text matters for rider navigation (riders open maps by
-    # address string); coordinates are optional and fall back to the store's.
+    # Address — coordinates are never typed by anyone (B2): use what the
+    # caller captured, else server-geocode the text, else fall back to the
+    # store's area so rider routing still has a target.
     if fulfillment_mode == "rider_delivery":
         addr = body.get("address") or {}
         if not addr.get("full_address"):
             raise HTTPException(status_code=400, detail="Delivery address is required for rider delivery")
         try:
-            lat = float(addr["latitude"]) if addr.get("latitude") not in (None, "") else store.get("latitude")
-            lng = float(addr["longitude"]) if addr.get("longitude") not in (None, "") else store.get("longitude")
+            lat = float(addr["latitude"]) if addr.get("latitude") not in (None, "") else None
+            lng = float(addr["longitude"]) if addr.get("longitude") not in (None, "") else None
         except (TypeError, ValueError):
-            lat, lng = store.get("latitude"), store.get("longitude")
+            lat, lng = None, None
+        if lat is None or lng is None:
+            from app.services.geocoding_service import geocode_address
+            coords = await geocode_address(addr.get("full_address"), addr.get("city"))
+            if coords:
+                lat, lng = coords
+            else:
+                lat, lng = store.get("latitude"), store.get("longitude")
         address = {
             "id": None, "label": addr.get("label", "Delivery"),
             "full_address": addr["full_address"],

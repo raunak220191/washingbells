@@ -70,6 +70,23 @@ def next_open_date() -> str:
     return d.isoformat()
 
 
+def find_bookable_slot(api: Api, store_id: str) -> tuple[str, str]:
+    """(date, slot) with capacity left, scanning up to 14 days ahead —
+    repeated test runs book out earlier dates (capacity is 6/slot)."""
+    d = date.today() + timedelta(days=1)
+    for _ in range(14):
+        if d.weekday() != 6:
+            r = api.get(f"/stores/{store_id}/slots", params={"date": d.isoformat()})
+            assert r.status_code == 200, r.text[:200]
+            data = r.json()
+            if not data.get("closed"):
+                avail = [s for s in data["slots"] if s.get("available")]
+                if avail:
+                    return d.isoformat(), avail[0]["slot"]
+        d += timedelta(days=1)
+    raise AssertionError(f"no bookable slot in the next 14 days for store {store_id}")
+
+
 def first_available_slot(api: Api, store_id: str, on_date: str) -> str:
     r = api.get(f"/stores/{store_id}/slots", params={"date": on_date})
     assert r.status_code == 200, r.text[:200]
@@ -83,7 +100,6 @@ def first_available_slot(api: Api, store_id: str, on_date: str) -> str:
 def place_order(api: Api, payment_method: str, on_date: str | None = None,
                 store_id: str = STORE_ID, **extra) -> dict:
     """Add one item to the cart and place an order the way the app does."""
-    on_date = on_date or next_open_date()
     services = api.get("/services").json()
     svc = services[0]
     item = svc["items"][0]
@@ -91,7 +107,10 @@ def place_order(api: Api, payment_method: str, on_date: str | None = None,
                                       "item_id": item["id"], "quantity": 1})
     assert r.status_code == 200, r.text[:200]
     addr = api.get("/addresses").json()[0]
-    slot = first_available_slot(api, store_id, on_date)
+    if on_date:
+        slot = first_available_slot(api, store_id, on_date)
+    else:
+        on_date, slot = find_bookable_slot(api, store_id)
     r = api.post("/orders", json={
         "address_id": addr["id"],
         "pickup_slot": {"date": on_date, "slot": slot},

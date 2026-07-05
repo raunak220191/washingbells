@@ -61,6 +61,18 @@ async def create_address(
         "user_id": current_user["user_id"],
         "created_at": datetime.now(timezone.utc),
     }
+    # B2: the customer is never asked for coordinates. GPS/on-device geocode
+    # fills them when possible; otherwise geocode the typed address here.
+    # (0 was the old client sentinel for "no GPS".)
+    if not doc.get("latitude") or not doc.get("longitude"):
+        from app.services.geocoding_service import geocode_address
+        coords = await geocode_address(doc.get("full_address"), doc.get("city"),
+                                       doc.get("state"), doc.get("pincode"))
+        if coords:
+            doc["latitude"], doc["longitude"] = coords
+            doc["geocoded"] = True
+        else:
+            doc["latitude"], doc["longitude"] = None, None
     result = await db.addresses.insert_one(doc)
     created = await db.addresses.find_one({"_id": result.inserted_id})
     return _format_address(created)
@@ -82,6 +94,20 @@ async def update_address(
     update_data = {k: v for k, v in update.model_dump().items() if v is not None}
     if not update_data:
         raise HTTPException(status_code=400, detail="No fields to update")
+
+    # B2: address text changed without fresh coordinates → re-geocode so the
+    # pin follows the address instead of pointing at the old location.
+    if update_data.get("full_address") and not update_data.get("latitude"):
+        from app.services.geocoding_service import geocode_address
+        coords = await geocode_address(
+            update_data.get("full_address"),
+            update_data.get("city", existing.get("city")),
+            update_data.get("state", existing.get("state")),
+            update_data.get("pincode", existing.get("pincode")),
+        )
+        if coords:
+            update_data["latitude"], update_data["longitude"] = coords
+            update_data["geocoded"] = True
 
     if update_data.get("is_default"):
         await db.addresses.update_many(

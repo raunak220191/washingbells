@@ -8,7 +8,7 @@ derived server-side instead of a rejection.
 
 from datetime import datetime, timedelta
 
-from conftest import place_order, next_open_date, first_available_slot, STORE_ID
+from conftest import place_order, find_bookable_slot, STORE_ID
 
 
 def test_legacy_identical_slots_get_derived_delivery(customer):
@@ -21,8 +21,7 @@ def test_legacy_identical_slots_get_derived_delivery(customer):
 
 
 def test_customer_chosen_delivery_slot_is_preserved(customer):
-    on_date = next_open_date()
-    slot = first_available_slot(customer, STORE_ID, on_date)
+    on_date, slot = find_bookable_slot(customer, STORE_ID)
     delivery_date = (datetime.strptime(on_date, "%Y-%m-%d") + timedelta(days=3))
     if delivery_date.weekday() == 6:  # stores closed Sunday
         delivery_date += timedelta(days=1)
