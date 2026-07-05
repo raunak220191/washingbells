@@ -2,18 +2,21 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { View, Text } from "react-native";
 import { COLORS } from "../../constants/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useOrderStore } from "../../stores/orderStore";
 
 export default function TabLayout() {
   const orders = useOrderStore((s) => s.orders);
   const newCount = orders.filter(o => o.status === "placed").length;
+  // G1: keep tab labels above the Android gesture/nav bar & iOS home indicator
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
       screenOptions={{
         tabBarActiveTintColor: COLORS.storeOrange,
         tabBarInactiveTintColor: COLORS.textMuted,
-        tabBarStyle: { backgroundColor: COLORS.white, borderTopColor: COLORS.border, height: 60, paddingBottom: 8, paddingTop: 4 },
+        tabBarStyle: { backgroundColor: COLORS.white, borderTopColor: COLORS.border, height: 60 + insets.bottom, paddingBottom: insets.bottom > 0 ? insets.bottom : 8, paddingTop: 4 },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },
       }}
     >

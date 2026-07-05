@@ -159,7 +159,7 @@ const styles = StyleSheet.create({
   quickBtn: { flex: 1, backgroundColor: COLORS.mintGreen, paddingVertical: SPACING.md, borderRadius: RADIUS.md, alignItems: "center" },
   quickText: { fontWeight: "700", color: COLORS.forestGreen, fontSize: 15 },
   customRow: { flexDirection: "row", gap: SPACING.sm },
-  customInput: { flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACING.md, fontSize: 15 },
+  customInput: { flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACING.md, fontSize: 15, color: COLORS.text },
   addBtn: { backgroundColor: COLORS.forestGreen, paddingHorizontal: SPACING.xl, borderRadius: RADIUS.md, justifyContent: "center" },
   addBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 15 },
   emptyBox: { alignItems: "center", paddingVertical: SPACING.xl },

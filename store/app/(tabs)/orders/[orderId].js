@@ -756,7 +756,7 @@ const styles = StyleSheet.create({
   actionBtnText: { color: COLORS.white, fontWeight: "700", fontSize: 14 },
   otpHint: { fontSize: 12, color: COLORS.textMuted, marginBottom: SPACING.sm },
   otpRow: { flexDirection: "row", gap: SPACING.sm, alignItems: "center" },
-  otpInput: { backgroundColor: COLORS.background, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACING.md, fontSize: 24, letterSpacing: 10, width: 140, textAlign: "center" },
+  otpInput: { backgroundColor: COLORS.background, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: SPACING.md, fontSize: 24, letterSpacing: 10, width: 140, textAlign: "center", color: COLORS.text },
   timePicker: { backgroundColor: COLORS.background, padding: SPACING.md, borderRadius: RADIUS.lg },
   timePickerTitle: { fontSize: 13, color: COLORS.textLight, textAlign: "center", marginBottom: SPACING.md, fontWeight: "600" },
   timePickerRow: { flexDirection: "row", gap: SPACING.sm },

@@ -715,7 +715,7 @@ const styles = StyleSheet.create({
   emailNudgeRow: { flexDirection: "row", gap: SPACING.sm },
   emailNudgeInput: {
     flex: 1, backgroundColor: COLORS.white, borderWidth: 1, borderColor: COLORS.border,
-    borderRadius: RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: 8, fontSize: 13,
+    borderRadius: RADIUS.sm, paddingHorizontal: SPACING.sm, paddingVertical: 8, fontSize: 13, color: COLORS.text
   },
   emailNudgeSave: {
     backgroundColor: COLORS.forestGreen, borderRadius: RADIUS.sm,

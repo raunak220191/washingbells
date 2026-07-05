@@ -2,11 +2,14 @@ import { Tabs } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 import { View, Text } from "react-native";
 import { COLORS } from "../../constants/theme";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTripStore } from "../../stores/tripStore";
 
 export default function TabLayout() {
   const worklist = useTripStore((s) => s.worklist);
   const pendingCount = worklist.filter(t => t.status === "assigned").length;
+  // G1: keep tab labels above the Android gesture/nav bar & iOS home indicator
+  const insets = useSafeAreaInsets();
 
   return (
     <Tabs
@@ -16,8 +19,8 @@ export default function TabLayout() {
         tabBarStyle: {
           backgroundColor: COLORS.white,
           borderTopColor: COLORS.border,
-          height: 60,
-          paddingBottom: 8,
+          height: 60 + insets.bottom,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : 8,
           paddingTop: 4,
         },
         tabBarLabelStyle: { fontSize: 11, fontWeight: "600" },

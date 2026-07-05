@@ -332,7 +332,7 @@ const styles = StyleSheet.create({
   modalDateBtn: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, backgroundColor: COLORS.background, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
   modalDateText: { fontSize: 14, fontWeight: "700", color: COLORS.black },
   modalLabel: { fontSize: 12, color: COLORS.textLight, marginTop: SPACING.md, marginBottom: 4 },
-  modalInput: { backgroundColor: COLORS.background, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
+  modalInput: { backgroundColor: COLORS.background, padding: SPACING.md, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border, color: COLORS.text },
   modalBtnRow: { flexDirection: "row", justifyContent: "flex-end", gap: SPACING.lg, marginTop: SPACING.lg },
   modalCancel: { fontSize: 14, fontWeight: "600", color: COLORS.textMuted },
   modalConfirm: { fontSize: 14, fontWeight: "800", color: COLORS.storeOrange },

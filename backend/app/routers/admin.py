@@ -2043,6 +2043,19 @@ async def admin_update_store(store_id: str, body: dict, current_user: dict = Dep
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
+    # G6: weekly hours (incl. per-day closed, e.g. Sunday) editable by admin —
+    # the same shape /store-ops/hours accepts; drives slot availability.
+    if "operating_hours" in body and isinstance(body["operating_hours"], dict):
+        hours = {}
+        for day in ("mon", "tue", "wed", "thu", "fri", "sat", "sun"):
+            entry = body["operating_hours"].get(day) or {}
+            hours[day] = {
+                "open": str(entry.get("open", "09:00")),
+                "close": str(entry.get("close", "21:00")),
+                "closed": bool(entry.get("closed", False)),
+            }
+        updates["operating_hours"] = hours
+
     # Keep the GeoJSON mirror in sync whenever coordinates change (B1)
     if "latitude" in updates or "longitude" in updates:
         updates["location"] = location_point(
