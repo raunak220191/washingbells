@@ -127,7 +127,10 @@ export default function CheckoutScreen() {
   const [deliverySlotsLoading, setDeliverySlotsLoading] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [couponCode, setCouponCode] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("online"); // online | cod
+  // D13: WHEN to pay and HOW to pay are separate questions.
+  const [paymentTiming, setPaymentTiming] = useState("pay_now"); // pay_now | pay_on_delivery
+  const [paymentInstrument, setPaymentInstrument] = useState("upi"); // upi | card | cash
+  const paymentMethod = paymentTiming === "pay_now" ? "online" : "cod";
   const [loading, setLoading] = useState(false);
 
   const [nearbyStores, setNearbyStores] = useState([]);
@@ -271,6 +274,8 @@ export default function CheckoutScreen() {
         special_instructions: specialInstructions || null,
         coupon_code: validationResult?.valid ? couponCode.trim() : null,
         payment_method: paymentMethod,
+        payment_timing: paymentTiming,
+        payment_instrument: paymentInstrument,
         wallet_amount: walletApplied,
         store_id: selectedStore.id,
       });
@@ -610,27 +615,42 @@ export default function CheckoutScreen() {
           </View>
         )}
 
-        {/* Payment Method */}
+        {/* Payment — WHEN and HOW are separate choices (D13) */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Payment Method</Text>
+          <Text style={styles.sectionTitle}>When would you like to pay?</Text>
           <View style={styles.paymentRow}>
             <TouchableOpacity
-              style={[styles.paymentOption, paymentMethod === "online" && styles.paymentActive]}
-              onPress={() => setPaymentMethod("online")}
+              style={[styles.paymentOption, paymentTiming === "pay_now" && styles.paymentActive]}
+              onPress={() => { setPaymentTiming("pay_now"); setPaymentInstrument("upi"); }}
             >
-              <Ionicons name="card-outline" size={20} color={paymentMethod === "online" ? COLORS.white : COLORS.forestGreen} />
-              <Text style={[styles.paymentText, paymentMethod === "online" && styles.paymentTextActive]}>Pay Now</Text>
-              <Text style={[styles.paymentSub, paymentMethod === "online" && styles.paymentTextActive]}>UPI / Card</Text>
+              <Ionicons name="flash-outline" size={20} color={paymentTiming === "pay_now" ? COLORS.white : COLORS.forestGreen} />
+              <Text style={[styles.paymentText, paymentTiming === "pay_now" && styles.paymentTextActive]}>Pay Now</Text>
+              <Text style={[styles.paymentSub, paymentTiming === "pay_now" && styles.paymentTextActive]}>Secure online payment</Text>
             </TouchableOpacity>
             <TouchableOpacity
-              style={[styles.paymentOption, paymentMethod === "cod" && styles.paymentActive]}
-              onPress={() => setPaymentMethod("cod")}
+              style={[styles.paymentOption, paymentTiming === "pay_on_delivery" && styles.paymentActive]}
+              onPress={() => { setPaymentTiming("pay_on_delivery"); setPaymentInstrument("cash"); }}
             >
-              <Ionicons name="cash-outline" size={20} color={paymentMethod === "cod" ? COLORS.white : COLORS.forestGreen} />
-              <Text style={[styles.paymentText, paymentMethod === "cod" && styles.paymentTextActive]}>Cash on Delivery</Text>
-              <Text style={[styles.paymentSub, paymentMethod === "cod" && styles.paymentTextActive]}>Pay when delivered</Text>
+              <Ionicons name="time-outline" size={20} color={paymentTiming === "pay_on_delivery" ? COLORS.white : COLORS.forestGreen} />
+              <Text style={[styles.paymentText, paymentTiming === "pay_on_delivery" && styles.paymentTextActive]}>Pay on Delivery</Text>
+              <Text style={[styles.paymentSub, paymentTiming === "pay_on_delivery" && styles.paymentTextActive]}>When your clothes arrive</Text>
             </TouchableOpacity>
           </View>
+
+          <Text style={[styles.sectionTitle, { marginTop: SPACING.lg }]}>How will you pay?</Text>
+          <ChipRow style={styles.pillScroll}>
+            {(paymentTiming === "pay_now"
+              ? [{ key: "upi", label: "UPI" }, { key: "card", label: "Card" }]
+              : [{ key: "cash", label: "Cash" }, { key: "upi", label: "UPI at door" }]
+            ).map((opt) => (
+              <Chip
+                key={opt.key}
+                label={opt.label}
+                active={paymentInstrument === opt.key}
+                onPress={() => setPaymentInstrument(opt.key)}
+              />
+            ))}
+          </ChipRow>
         </View>
 
         {/* Order Summary */}
@@ -653,7 +673,11 @@ export default function CheckoutScreen() {
       <BottomBar style={styles.bottomBarRow}>
         <View>
           <Text style={styles.bottomAmount}>₹{grandTotal.toFixed(2)}</Text>
-          <Text style={styles.bottomSub}>{paymentMethod === "cod" ? "Cash on Delivery" : "Pay online"}</Text>
+          <Text style={styles.bottomSub}>
+            {paymentTiming === "pay_on_delivery"
+              ? `On delivery · ${paymentInstrument === "cash" ? "Cash" : "UPI"}`
+              : `Pay now · ${paymentInstrument === "card" ? "Card" : "UPI"}`}
+          </Text>
         </View>
         <Button
           title={paymentMethod === "cod" ? "Place Order (COD)" : "Pay & Place Order"}

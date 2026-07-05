@@ -154,7 +154,12 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         avail = w["balance"] if w else 0.0
         wallet_applied = min(order_data.wallet_amount, avail, subtotal + delivery_fee + platform_fee - discount)
     total_amount = max(round(subtotal + delivery_fee + platform_fee - discount - wallet_applied, 2), 0)
-    pm = order_data.payment_method or "online"
+    # D13: timing wins when the (newer) app sends it; payment_method stays the
+    # backward-compatible source for old builds.
+    if order_data.payment_timing in ("pay_now", "pay_on_delivery"):
+        pm = "online" if order_data.payment_timing == "pay_now" else "cod"
+    else:
+        pm = order_data.payment_method or "online"
     # A3: an online order with money still due starts as pending_payment and
     # alerts nobody until Razorpay confirms (verify or webhook). COD and
     # fully-wallet-covered orders are payable immediately.
@@ -180,6 +185,8 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         ),
         "special_instructions": order_data.special_instructions,
         "payment_method": pm, "status": initial_status, "payment_status": ps,
+        "payment_timing": order_data.payment_timing or ("pay_now" if pm == "online" else "pay_on_delivery"),
+        "payment_instrument": order_data.payment_instrument,
         "status_timeline": [{"status": initial_status, "timestamp": now.isoformat(), "note": timeline_note}],
         "confirmation_notified_at": None,
         "garment_tags": garment_tags, "assigned_agent_id": None, "agent_info": None,

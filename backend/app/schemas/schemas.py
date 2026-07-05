@@ -168,7 +168,12 @@ class OrderCreate(BaseModel):
     delivery_slot: TimeSlot
     special_instructions: Optional[str] = None
     coupon_code: Optional[str] = None
-    payment_method: str = "online"  # online | cod
+    payment_method: str = "online"  # online | cod (derived from timing when sent)
+    # D13: timing and instrument are SEPARATE questions. timing decides the
+    # money flow (Razorpay now vs collect on delivery); instrument is what the
+    # customer said they'll use (upi/card for now; cash/upi at the door).
+    payment_timing: Optional[str] = None      # pay_now | pay_on_delivery
+    payment_instrument: Optional[str] = None  # upi | card | cash
     wallet_amount: float = 0.0  # Amount to pay from WB wallet
     store_id: Optional[str] = None  # Customer-selected store; falls back to auto-assign if omitted
 
