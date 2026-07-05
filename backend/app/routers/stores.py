@@ -3,6 +3,7 @@
 from fastapi import APIRouter, HTTPException, Query, status
 from app.core.database import get_db
 from app.core.utils import haversine_km
+from app.services.geo_service import find_serviceable_stores, DEFAULT_SERVICE_RADIUS_KM
 from app.schemas.phase1_schemas import NearbyStoreResponse, StoreResponse
 from bson import ObjectId
 from datetime import datetime, timezone
@@ -51,6 +52,8 @@ async def list_stores():
     if not stores:
         now = datetime.now(timezone.utc)
         SEED_STORE["created_at"] = now
+        from app.services.geo_service import location_point
+        SEED_STORE["location"] = location_point(SEED_STORE["latitude"], SEED_STORE["longitude"])
         await db.stores.insert_one(SEED_STORE)
         stores = await db.stores.find({"status": "active"}).to_list(length=50)
 
@@ -61,21 +64,34 @@ async def list_stores():
 async def get_nearby_stores(
     lat: float = Query(..., description="Customer latitude"),
     lng: float = Query(..., description="Customer longitude"),
-    radius: float = Query(10.0, description="Search radius in km"),
+    radius: float = Query(None, description="DEPRECATED — serviceability is decided by each store's own geo_radius_km; this parameter is ignored"),
 ):
-    """Return active stores within radius km, sorted by distance."""
+    """Active stores whose serviceable radius covers the customer, nearest
+    first (B1). A store with geo_radius_km=30 matches a customer 20 km away
+    regardless of what the app passes — the old client-radius filter is what
+    made configured stores invisible.
+    """
     db = get_db()
-    stores = await db.stores.find({"status": "active"}).to_list(length=100)
-    nearby = []
+    try:
+        stores = await find_serviceable_stores(db, lat, lng)
+    except Exception:
+        # $geoNear needs the 2dsphere index — degrade to the linear scan
+        # rather than emptying the store list (B4).
+        stores = []
+        for s in await db.stores.find({"status": "active"}).to_list(length=100):
+            if s.get("latitude") is None or s.get("longitude") is None:
+                continue
+            dist = haversine_km(lat, lng, s["latitude"], s["longitude"])
+            if dist <= (s.get("geo_radius_km") or DEFAULT_SERVICE_RADIUS_KM):
+                stores.append({**s, "dist_km": dist})
+        stores.sort(key=lambda s: s["dist_km"])
+    out = []
     for s in stores:
-        dist = haversine_km(lat, lng, s["latitude"], s["longitude"])
-        if dist <= radius:
-            formatted = _format_store(s)
-            formatted["distance_km"] = round(dist, 2)
-            formatted["is_open"] = s.get("is_open", False)
-            nearby.append(formatted)
-    nearby.sort(key=lambda x: x["distance_km"])
-    return nearby
+        formatted = _format_store(s)
+        formatted["distance_km"] = round(s["dist_km"], 2)
+        formatted["is_open"] = s.get("is_open", False)
+        out.append(formatted)
+    return out
 
 
 @router.get("/{store_id}", response_model=StoreResponse)

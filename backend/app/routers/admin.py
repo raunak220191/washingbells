@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from bson import ObjectId
 from app.core.database import get_db
+from app.services.geo_service import location_point
 from app.core.security import get_current_user
 from app.core.categories import ITEM_CATEGORIES
 
@@ -1739,7 +1740,8 @@ async def admin_create_store(body: dict, current_user: dict = Depends(get_curren
         "whatsapp": body.get("store_phone", phone),
         "latitude": float(body.get("latitude", 30.9010)),
         "longitude": float(body.get("longitude", 75.8573)),
-        "geo_radius_km": 15,
+        "location": location_point(body.get("latitude", 30.9010), body.get("longitude", 75.8573)),
+        "geo_radius_km": float(body.get("geo_radius_km", 15)),
         "status": "active", "is_open": False,
         "opening_time": body.get("opening_time", "09:00"),
         "closing_time": body.get("closing_time", "21:00"),
@@ -1883,6 +1885,12 @@ async def admin_update_store(store_id: str, body: dict, current_user: dict = Dep
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
 
+    # Keep the GeoJSON mirror in sync whenever coordinates change (B1)
+    if "latitude" in updates or "longitude" in updates:
+        updates["location"] = location_point(
+            updates.get("latitude", store.get("latitude")),
+            updates.get("longitude", store.get("longitude")),
+        )
     before = {k: store.get(k) for k in updates}
     updates["updated_at"] = datetime.now(timezone.utc)
     await db.stores.update_one({"_id": store["_id"]}, {"$set": updates})

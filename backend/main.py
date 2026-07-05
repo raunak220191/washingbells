@@ -57,6 +57,11 @@ async def lifespan(app: FastAPI):
         # OTP rate-limit window — requests expire after 1 hour
         await db.otp_requests.create_index("created_at", expireAfterSeconds=60 * 60)
         await db.otp_requests.create_index([("phone", 1), ("created_at", -1)])
+        # Geo matching (B1): 2dsphere on the GeoJSON mirror of store lat/lng,
+        # plus a backfill for stores created before the field existed.
+        await db.stores.create_index([("location", "2dsphere")])
+        from app.services.geo_service import sync_missing_store_locations
+        await sync_missing_store_locations(db)
         print("[startup] DB indexes ensured")
     except Exception as e:
         print(f"[startup] Index ensure skipped: {e}")

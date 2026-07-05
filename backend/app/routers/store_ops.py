@@ -122,6 +122,9 @@ async def complete_store_profile(body: dict, current_user: dict = Depends(get_cu
     if "latitude" in body and "longitude" in body and body["latitude"] is not None:
         update["latitude"] = float(body["latitude"])
         update["longitude"] = float(body["longitude"])
+        # Keep the GeoJSON mirror in sync so geo matching sees the new pin (B1)
+        from app.services.geo_service import location_point
+        update["location"] = location_point(update["latitude"], update["longitude"])
     if "store_photos" in body and isinstance(body["store_photos"], list):
         update["store_photos"] = body["store_photos"]
 

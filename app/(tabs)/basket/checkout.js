@@ -167,7 +167,9 @@ export default function CheckoutScreen() {
     setStoresLoading(true);
     api
       .get("/stores/nearby", {
-        params: { lat: selectedAddress.latitude, lng: selectedAddress.longitude, radius: 15 },
+        // Serviceability is decided per-store (geo_radius_km) on the server —
+        // do NOT pass a radius; a hardcoded 15 here hid stores set to 30 km (B1).
+        params: { lat: selectedAddress.latitude, lng: selectedAddress.longitude },
       })
       .then((res) => setNearbyStores(res.data))
       .catch(() => setNearbyStores([]))
