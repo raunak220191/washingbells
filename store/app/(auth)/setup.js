@@ -9,6 +9,7 @@ import { Ionicons } from "@expo/vector-icons";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import * as Location from "expo-location";
 import { COLORS, SPACING, RADIUS } from "../../constants/theme";
+import { mapsConfigured } from "../../lib/maps";
 import { useAuthStore } from "../../stores/authStore";
 
 const DEFAULT_REGION = {
@@ -37,6 +38,36 @@ export default function StoreSetupScreen() {
   const update = (key, val) => setForm(f => ({ ...f, [key]: val }));
 
   const openMapPicker = async () => {
+    if (!mapsConfigured) {
+      // No Google Maps key in this Android build — mounting MapView would
+      // crash natively (B3). Capture the pin from device GPS instead.
+      Alert.alert(
+        "Pin via GPS",
+        "Stand at the store entrance and we'll capture its exact location from your phone's GPS.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Use My Location",
+            onPress: async () => {
+              setLocating(true);
+              try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== "granted") {
+                  Alert.alert("Permission Denied", "Allow location access to use this feature.");
+                  return;
+                }
+                const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+                setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+                setCoordsPicked(true);
+              } catch {
+                Alert.alert("Error", "Could not get your location. Check that GPS is on and try again.");
+              } finally { setLocating(false); }
+            },
+          },
+        ],
+      );
+      return;
+    }
     setDraftRegion({
       latitude: coords.latitude,
       longitude: coords.longitude,
@@ -176,7 +207,7 @@ export default function StoreSetupScreen() {
       </ScrollView>
 
       {/* Full-screen map modal */}
-      <Modal visible={mapVisible} animationType="slide" statusBarTranslucent>
+      <Modal visible={mapVisible && mapsConfigured} animationType="slide" statusBarTranslucent>
         <View style={styles.mapContainer}>
           <MapView
             ref={mapRef}

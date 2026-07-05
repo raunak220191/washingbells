@@ -10,6 +10,7 @@ import * as ImagePicker from "expo-image-picker";
 import * as Location from "expo-location";
 import MapView, { PROVIDER_DEFAULT } from "react-native-maps";
 import { COLORS, SPACING, RADIUS } from "../../constants/theme";
+import { mapsConfigured } from "../../lib/maps";
 import { useAuthStore } from "../../stores/authStore";
 
 const STEPS = [
@@ -85,6 +86,36 @@ export default function CompleteProfileScreen() {
   };
 
   const openMap = () => {
+    if (!mapsConfigured) {
+      // No Google Maps key in this Android build — mounting MapView would
+      // crash natively (B3). Grab the pin from device GPS instead.
+      Alert.alert(
+        "Pin via GPS",
+        "Stand at the store entrance and we'll capture its exact location from your phone's GPS.",
+        [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Use My Location",
+            onPress: async () => {
+              setLocating(true);
+              try {
+                const { status } = await Location.requestForegroundPermissionsAsync();
+                if (status !== "granted") {
+                  Alert.alert("Permission Denied", "Allow location access to use this feature.");
+                  return;
+                }
+                const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
+                setCoords({ latitude: pos.coords.latitude, longitude: pos.coords.longitude });
+                setCoordsPicked(true);
+              } catch {
+                Alert.alert("Error", "Could not get your location. Check that GPS is on and try again.");
+              } finally { setLocating(false); }
+            },
+          },
+        ],
+      );
+      return;
+    }
     setDraftRegion({
       latitude: coords.latitude, longitude: coords.longitude,
       latitudeDelta: 0.01, longitudeDelta: 0.01,
@@ -203,7 +234,7 @@ export default function CompleteProfileScreen() {
       </View>
 
       {/* Map Picker Modal */}
-      <Modal visible={mapVisible} animationType="slide" statusBarTranslucent>
+      <Modal visible={mapVisible && mapsConfigured} animationType="slide" statusBarTranslucent>
         <View style={styles.mapContainer}>
           <MapView
             ref={mapRef}
