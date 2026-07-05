@@ -12,6 +12,7 @@ import { useOrderStore } from "../../../stores/orderStore";
 import { useAuthStore } from "../../../stores/authStore";
 import { printOrderInvoice, shareOrderInvoice } from "../../../lib/printTags";
 import api from "../../../lib/api";
+import TabletContainer from "../../../components/TabletContainer";
 
 const PAYMENT_METHODS = [
   { key: "cash", label: "Cash", icon: "cash-outline" },
@@ -43,6 +44,9 @@ export default function WalkInScreen() {
   const [address, setAddress] = useState("");
   const [city, setCity] = useState(store?.city || "");
   const [submitting, setSubmitting] = useState(false);
+  // E5: bill-level discount controls
+  const [couponCode, setCouponCode] = useState("");
+  const [discountPct, setDiscountPct] = useState("");
 
   useEffect(() => {
     (async () => {
@@ -79,11 +83,14 @@ export default function WalkInScreen() {
 
   const setQty = (svc, item, qty) => {
     const key = itemKey(svc.id, item.id);
+    // E6: kg services take decimals (0.1 steps); piece services stay whole
+    const isKg = svc.pricing_unit === "kg";
+    const q = isKg ? Math.round(qty * 10) / 10 : Math.round(qty);
     setCart((prev) => {
       const next = { ...prev };
-      if (qty <= 0) { delete next[key]; }
+      if (q <= 0) { delete next[key]; }
       else {
-        next[key] = { service_id: svc.id, item_id: item.id, service_name: svc.name, name: item.name, price: item.price, qty };
+        next[key] = { service_id: svc.id, item_id: item.id, service_name: svc.name, name: item.name, price: item.price, qty: q, unit: svc.pricing_unit || "piece" };
       }
       return next;
     });
@@ -91,9 +98,12 @@ export default function WalkInScreen() {
 
   const cartItems = Object.values(cart);
   const subtotal = cartItems.reduce((s, c) => s + c.price * c.qty, 0);
-  const totalQty = cartItems.reduce((s, c) => s + c.qty, 0);
+  const totalQty = cartItems.reduce((s, c) => s + (c.unit === "kg" ? 1 : c.qty), 0);
   const deliveryFee = fulfillment === "rider_delivery" && subtotal < 299 ? 40 : 0;
-  const total = subtotal + deliveryFee;
+  // E5: coupon and/or manual % discount (validated server-side on submit)
+  const pctNum = Math.min(Math.max(parseFloat(discountPct) || 0, 0), 100);
+  const discountPreview = Math.round(subtotal * pctNum) / 100;
+  const total = Math.max(subtotal + deliveryFee - discountPreview, 0);
 
   const handleSubmit = async () => {
     const digits = phone.replace(/\D/g, "");
@@ -109,6 +119,8 @@ export default function WalkInScreen() {
       fulfillment_mode: fulfillment,
       payment_method: payment,
       special_instructions: null,
+      coupon_code: couponCode.trim() || null,
+      discount_pct: pctNum || 0,
     };
     if (fulfillment === "rider_delivery") {
       // Geocode the typed address so the delivery rider routes to the CUSTOMER,
@@ -178,6 +190,7 @@ export default function WalkInScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TabletContainer>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => router.back()} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={24} color={COLORS.black} />
@@ -236,25 +249,39 @@ export default function WalkInScreen() {
                     </TouchableOpacity>
                     {open && (svc.items || []).map((item) => {
                       const qty = getQty(svc.id, item.id);
+                      const isKg = svc.pricing_unit === "kg";
+                      const step = isKg ? 0.5 : 1;
                       return (
                         <View key={item.id} style={styles.itemRow}>
                           <View style={{ flex: 1 }}>
                             <Text style={styles.itemName}>{item.name}</Text>
                             <Text style={styles.itemMeta}>
-                              ₹{item.price}{item.category && item.category !== "unisex" ? ` · ${item.category}` : ""}
+                              ₹{item.price}{isKg ? "/kg" : ""}{item.category && item.category !== "unisex" ? ` · ${item.category}` : ""}
                             </Text>
                           </View>
                           {qty === 0 ? (
-                            <TouchableOpacity style={styles.addBtn} onPress={() => setQty(svc, item, 1)}>
+                            <TouchableOpacity style={styles.addBtn} onPress={() => setQty(svc, item, isKg ? 1 : 1)}>
                               <Text style={styles.addBtnText}>ADD</Text>
                             </TouchableOpacity>
                           ) : (
                             <View style={styles.stepper}>
-                              <TouchableOpacity onPress={() => setQty(svc, item, qty - 1)} style={styles.stepBtn}>
+                              <TouchableOpacity onPress={() => setQty(svc, item, qty - step)} style={styles.stepBtn}>
                                 <Ionicons name="remove" size={16} color={COLORS.storeOrange} />
                               </TouchableOpacity>
-                              <Text style={styles.stepQty}>{qty}</Text>
-                              <TouchableOpacity onPress={() => setQty(svc, item, qty + 1)} style={styles.stepBtn}>
+                              {/* E4/E6: direct numeric entry — decimals for kg */}
+                              <TextInput
+                                style={styles.stepQtyInput}
+                                keyboardType={isKg ? "decimal-pad" : "number-pad"}
+                                defaultValue={String(qty)}
+                                key={`${item.id}:${qty}`}
+                                onEndEditing={(e) => {
+                                  const v = parseFloat((e.nativeEvent.text || "").replace(",", "."));
+                                  setQty(svc, item, isNaN(v) ? 0 : v);
+                                }}
+                                selectTextOnFocus
+                              />
+                              {isKg && <Text style={styles.kgLabel}>kg</Text>}
+                              <TouchableOpacity onPress={() => setQty(svc, item, qty + step)} style={styles.stepBtn}>
                                 <Ionicons name="add" size={16} color={COLORS.storeOrange} />
                               </TouchableOpacity>
                             </View>
@@ -306,6 +333,61 @@ export default function WalkInScreen() {
             )}
           </View>
 
+          {/* Bill review — every line editable/removable (E4) */}
+          {cartItems.length > 0 && (
+            <View style={styles.card}>
+              <Text style={styles.sectionTitle}>Bill</Text>
+              {cartItems.map((c) => (
+                <View key={itemKey(c.service_id, c.item_id)} style={styles.billRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.itemName}>{c.name}</Text>
+                    <Text style={styles.itemMeta}>
+                      {c.qty}{c.unit === "kg" ? " kg" : " ×"} ₹{c.price} = ₹{(c.price * c.qty).toFixed(2)}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    onPress={() => setQty({ id: c.service_id, name: c.service_name, pricing_unit: c.unit }, { id: c.item_id, name: c.name, price: c.price }, 0)}
+                    style={styles.billRemove}
+                    accessibilityLabel={`Remove ${c.name}`}
+                  >
+                    <Ionicons name="trash-outline" size={18} color={COLORS.error || "#C62828"} />
+                  </TouchableOpacity>
+                </View>
+              ))}
+              <View style={styles.billTotals}>
+                <Text style={styles.itemMeta}>Subtotal ₹{subtotal.toFixed(2)}</Text>
+                {deliveryFee > 0 && <Text style={styles.itemMeta}>Delivery ₹{deliveryFee.toFixed(2)}</Text>}
+                {discountPreview > 0 && <Text style={styles.itemMeta}>Discount −₹{discountPreview.toFixed(2)}</Text>}
+              </View>
+            </View>
+          )}
+
+          {/* Discount (E5) */}
+          <View style={styles.card}>
+            <Text style={styles.sectionTitle}>Discount</Text>
+            <View style={{ flexDirection: "row", gap: SPACING.sm }}>
+              <TextInput
+                style={[styles.input, { flex: 2, marginBottom: 0 }]}
+                placeholder="Coupon code (optional)"
+                placeholderTextColor={COLORS.textMuted}
+                autoCapitalize="characters"
+                value={couponCode}
+                onChangeText={setCouponCode}
+              />
+              <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="% off"
+                placeholderTextColor={COLORS.textMuted}
+                keyboardType="decimal-pad"
+                value={discountPct}
+                onChangeText={setDiscountPct}
+              />
+            </View>
+            {!!couponCode.trim() && (
+              <Text style={styles.itemMeta}>Coupon is validated when you create the bill.</Text>
+            )}
+          </View>
+
           {/* Payment */}
           <View style={styles.card}>
             <Text style={styles.sectionTitle}>Payment</Text>
@@ -337,6 +419,7 @@ export default function WalkInScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+      </TabletContainer>
     </SafeAreaView>
   );
 }
@@ -371,6 +454,11 @@ const styles = StyleSheet.create({
   segText: { fontSize: 13, fontWeight: "600", color: COLORS.textLight },
   segTextActive: { color: COLORS.white },
   payHint: { fontSize: 12, color: COLORS.textMuted, marginTop: SPACING.sm },
+  stepQtyInput: { minWidth: 44, textAlign: "center", fontSize: 14, fontWeight: "700", color: COLORS.text, paddingVertical: 2, paddingHorizontal: 4 },
+  kgLabel: { fontSize: 11, color: COLORS.textMuted, marginRight: 2 },
+  billRow: { flexDirection: "row", alignItems: "center", paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: COLORS.borderLight },
+  billRemove: { padding: 8 },
+  billTotals: { marginTop: SPACING.sm, gap: 2 },
   bottomBar: { position: "absolute", bottom: 0, left: 0, right: 0, flexDirection: "row", justifyContent: "space-between", alignItems: "center", backgroundColor: COLORS.white, paddingHorizontal: SPACING.xl, paddingVertical: SPACING.lg, borderTopWidth: 1, borderTopColor: COLORS.border, ...SHADOW },
   barItems: { fontSize: 12, color: COLORS.textLight },
   barTotal: { fontSize: 22, fontWeight: "800", color: COLORS.black },

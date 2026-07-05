@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import { Audio } from "expo-av";
 import { COLORS, SPACING, RADIUS, SHADOW, ORDER_STATUS_COLORS } from "../../../constants/theme";
 import { useOrderStore } from "../../../stores/orderStore";
+import TabletContainer from "../../../components/TabletContainer";
 
 const TABS = [
   { key: null, label: "All" },
@@ -102,6 +103,7 @@ export default function OrdersScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TabletContainer>
       <View style={styles.header}><Text style={styles.headerTitle}>Orders</Text></View>
 
       {/* Tab Filter */}
@@ -138,6 +140,7 @@ export default function OrdersScreen() {
           }
         />
       )}
+      </TabletContainer>
     </SafeAreaView>
   );
 }

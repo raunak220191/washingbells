@@ -6,6 +6,7 @@ import { useRouter } from "expo-router";
 import { COLORS, SPACING, RADIUS, SHADOW, ORDER_STATUS_COLORS } from "../../../constants/theme";
 import { useAuthStore } from "../../../stores/authStore";
 import { useOrderStore } from "../../../stores/orderStore";
+import TabletContainer from "../../../components/TabletContainer";
 
 export default function DashboardScreen() {
   const router = useRouter();
@@ -50,6 +51,7 @@ export default function DashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
+      <TabletContainer>
       <ScrollView
         showsVerticalScrollIndicator={false}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={COLORS.storeOrange} />}
@@ -171,6 +173,7 @@ export default function DashboardScreen() {
           )}
         </View>
       </ScrollView>
+      </TabletContainer>
     </SafeAreaView>
   );
 }
