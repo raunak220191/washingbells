@@ -28,7 +28,7 @@ function nextDates(n = 6) {
   return out;
 }
 
-export default function RescheduleModal({ visible, orderId, accent = COLORS.forestGreen, onClose, onDone }) {
+export default function RescheduleModal({ visible, orderId, target = "pickup", accent = COLORS.forestGreen, onClose, onDone }) {
   const dates = nextDates();
   const [date, setDate] = useState(dates[0].value);
   const [slotData, setSlotData] = useState(null);
@@ -51,7 +51,8 @@ export default function RescheduleModal({ visible, orderId, accent = COLORS.fore
     if (!slot) { Alert.alert("Pick a slot", "Please select a time slot."); return; }
     setSaving(true);
     try {
-      await api.put(`/orders/${orderId}/reschedule`, { pickup_slot: { date, slot } });
+      const field = target === "delivery" ? "delivery_slot" : "pickup_slot";
+      await api.put(`/orders/${orderId}/reschedule`, { [field]: { date, slot } });
       onDone?.();
     } catch (e) {
       Alert.alert("Couldn't reschedule", e?.response?.data?.detail || "Please try again.");
@@ -65,7 +66,7 @@ export default function RescheduleModal({ visible, orderId, accent = COLORS.fore
       <View style={styles.backdrop}>
         <View style={styles.sheet}>
           <View style={styles.handle} />
-          <Text style={styles.title}>Reschedule Pickup</Text>
+          <Text style={styles.title}>{target === "delivery" ? "Edit Delivery Slot" : "Reschedule Pickup"}</Text>
 
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: SPACING.md }}>
             {dates.map((d) => (

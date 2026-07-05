@@ -57,7 +57,7 @@ export default function OrderDetailScreen() {
   const [loading, setLoading] = useState(true);
   const [payLoading, setPayLoading] = useState(false);
   const [rzCheckout, setRzCheckout] = useState(null);
-  const [showReschedule, setShowReschedule] = useState(false);
+  const [rescheduleTarget, setRescheduleTarget] = useState(null); // null | "pickup" | "delivery"
   const [billLoading, setBillLoading] = useState(false);
   const [reordering, setReordering] = useState(false);
 
@@ -164,6 +164,7 @@ export default function OrderDetailScreen() {
     order.total_amount > 0;
   const canCancel = ["placed", "pending_payment", "confirmed"].includes(order.status);
   const canReschedule = ["placed", "pending_payment", "confirmed", "rider_assigned_pickup"].includes(order.status);
+  const canEditDelivery = !["out_for_delivery", "delivered", "cancelled", "rejected"].includes(order.status);
 
   return (
     <Screen padded={false}>
@@ -182,7 +183,21 @@ export default function OrderDetailScreen() {
             <StatusBadge status={order.status} />
           </View>
           <Text style={styles.totalAmount}>₹{order.total_amount.toFixed(2)}</Text>
-          {order.payment_method === "cod" && <Text style={styles.codLabel}>💵 Cash on Delivery</Text>}
+          {/* A7: payment state is first-class — paid / unpaid / COD due */}
+          <View style={[styles.payStateBadge, order.payment_status === "paid" ? styles.payStatePaid : styles.payStateDue]}>
+            <Ionicons
+              name={order.payment_status === "paid" ? "checkmark-circle" : "time-outline"}
+              size={14}
+              color={order.payment_status === "paid" ? TINTS.successText : TINTS.warningText}
+            />
+            <Text style={[styles.payStateText, { color: order.payment_status === "paid" ? TINTS.successText : TINTS.warningText }]}>
+              {order.payment_status === "paid"
+                ? "Paid"
+                : order.payment_method === "cod"
+                  ? "Cash on Delivery — payment due"
+                  : "Payment pending"}
+            </Text>
+          </View>
         </View>
 
         {/* Status Timeline */}
@@ -311,11 +326,43 @@ export default function OrderDetailScreen() {
             </View>
           ) : (
             <View style={styles.scheduleRow}>
-              <View style={styles.scheduleBlock}><Ionicons name="arrow-up-circle-outline" size={18} color={COLORS.gold} /><Text style={styles.scheduleLabel}>Pickup</Text><Text style={styles.scheduleVal}>{order.pickup_slot?.date} · {order.pickup_slot?.slot}</Text></View>
-              <View style={styles.scheduleBlock}><Ionicons name="arrow-down-circle-outline" size={18} color={COLORS.forestGreen} /><Text style={styles.scheduleLabel}>Delivery</Text><Text style={styles.scheduleVal}>{order.delivery_slot?.date} · {order.delivery_slot?.slot}</Text></View>
+              <TouchableOpacity
+                style={styles.scheduleBlock}
+                disabled={!canReschedule}
+                onPress={() => setRescheduleTarget("pickup")}
+                accessibilityLabel="Edit pickup slot"
+              >
+                <Ionicons name="arrow-up-circle-outline" size={18} color={COLORS.gold} />
+                <Text style={styles.scheduleLabel}>Pickup{canReschedule ? " ✎" : ""}</Text>
+                <Text style={styles.scheduleVal}>{order.pickup_slot?.date} · {order.pickup_slot?.slot}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.scheduleBlock}
+                disabled={!canEditDelivery}
+                onPress={() => setRescheduleTarget("delivery")}
+                accessibilityLabel="Edit delivery slot"
+              >
+                <Ionicons name="arrow-down-circle-outline" size={18} color={COLORS.forestGreen} />
+                <Text style={styles.scheduleLabel}>Est. Delivery{canEditDelivery ? " ✎" : ""}</Text>
+                <Text style={styles.scheduleVal}>{order.delivery_slot?.date} · {order.delivery_slot?.slot}</Text>
+              </TouchableOpacity>
             </View>
           )}
         </View>
+
+        {/* Delivery Address (A7) */}
+        {order.address?.full_address && order.order_source !== "walk_in" && (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Delivery Address</Text>
+            <View style={styles.addressRow}>
+              <Ionicons name="location-outline" size={18} color={COLORS.forestGreen} />
+              <View style={{ flex: 1, marginLeft: SPACING.sm }}>
+                {!!order.address.label && <Text style={styles.addressLabel}>{order.address.label}</Text>}
+                <Text style={styles.addressText}>{order.address.full_address}</Text>
+              </View>
+            </View>
+          </View>
+        )}
 
         {order.special_instructions && (
           <View style={styles.section}>
@@ -335,7 +382,7 @@ export default function OrderDetailScreen() {
               </TouchableOpacity>
             )}
             {canReschedule && (
-              <TouchableOpacity style={styles.rescheduleBtn} onPress={() => setShowReschedule(true)}>
+              <TouchableOpacity style={styles.rescheduleBtn} onPress={() => setRescheduleTarget("pickup")}>
                 <Ionicons name="calendar-outline" size={17} color={COLORS.forestGreen} />
                 <Text style={styles.rescheduleText}>Reschedule</Text>
               </TouchableOpacity>
@@ -358,11 +405,17 @@ export default function OrderDetailScreen() {
       </BottomBar>
 
       <RescheduleModal
-        visible={showReschedule}
+        visible={!!rescheduleTarget}
+        target={rescheduleTarget || "pickup"}
         orderId={id}
         accent={COLORS.forestGreen}
-        onClose={() => setShowReschedule(false)}
-        onDone={() => { setShowReschedule(false); fetchOrder(id); Alert.alert("Rescheduled", "Your pickup time has been updated."); }}
+        onClose={() => setRescheduleTarget(null)}
+        onDone={() => {
+          const which = rescheduleTarget === "delivery" ? "delivery" : "pickup";
+          setRescheduleTarget(null);
+          fetchOrder(id);
+          Alert.alert("Rescheduled", `Your ${which} time has been updated.`);
+        }}
       />
 
       <RazorpayCheckout
@@ -385,7 +438,13 @@ const styles = StyleSheet.create({
   orderNumber: { fontSize: 18, fontWeight: "800", color: COLORS.forestGreen },
   orderDate: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
   totalAmount: { fontSize: 22, fontWeight: "800", color: COLORS.black, marginTop: SPACING.sm },
-  codLabel: { fontSize: 13, color: COLORS.gold, fontWeight: "600", marginTop: 4 },
+  payStateBadge: { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", gap: SPACING.xs, marginTop: SPACING.sm, paddingVertical: SPACING.xs, paddingHorizontal: SPACING.md, borderRadius: RADIUS.full },
+  payStatePaid: { backgroundColor: TINTS.successBg },
+  payStateDue: { backgroundColor: TINTS.warningBg },
+  payStateText: { ...TYPE.label },
+  addressRow: { flexDirection: "row", alignItems: "flex-start" },
+  addressLabel: { ...TYPE.label, color: COLORS.black, textTransform: "capitalize" },
+  addressText: { ...TYPE.bodySm, color: COLORS.textLight, marginTop: 2 },
   // Handover OTP card
   otpCard: {
     flexDirection: "row", alignItems: "center",

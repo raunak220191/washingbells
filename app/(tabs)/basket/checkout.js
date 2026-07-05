@@ -38,6 +38,73 @@ const getAvailableDates = () => {
   return dates;
 };
 
+// Delivery date options: 1–5 days after the chosen pickup date (A7 — delivery
+// is a distinct, customer-selected slot, not a copy of pickup).
+const TURNAROUND_DAYS = 2;
+const getDeliveryDates = (pickupDateStr) => {
+  if (!pickupDateStr) return [];
+  const base = new Date(`${pickupDateStr}T00:00:00`);
+  const dates = [];
+  for (let i = 1; i <= 5; i++) {
+    const d = new Date(base);
+    d.setDate(base.getDate() + i);
+    dates.push({
+      label: d.toLocaleDateString("en-IN", { weekday: "short", day: "numeric", month: "short" }),
+      value: fmtLocalDate(d),
+    });
+  }
+  return dates;
+};
+
+// Shared hour-slot grid for the pickup and delivery pickers (A7).
+function SlotPicker({ hasStore, loading, data, selected, onSelect }) {
+  if (!hasStore) return <Text style={styles.slotHint}>Select a store above to see available slots.</Text>;
+  if (loading) return (
+    <View style={{ paddingVertical: SPACING.md }}>
+      <ActivityIndicator color={COLORS.forestGreen} />
+    </View>
+  );
+  if (data?.closed) return (
+    <View style={styles.slotClosedBox}>
+      <Ionicons name="close-circle" size={16} color={COLORS.error} />
+      <Text style={styles.slotClosedText}>
+        Store closed on this date{data.closed_reason ? ` — ${data.closed_reason}` : ""}. Pick another day.
+      </Text>
+    </View>
+  );
+  if (!data?.slots?.length) return <Text style={styles.slotHint}>No slots available for this date.</Text>;
+  return (
+    <View style={styles.slotGrid}>
+      {data.slots.map((slot) => {
+        const isFull = !slot.available && !slot.is_past;
+        const isPast = slot.is_past;
+        const isSelected = selected === slot.slot;
+        return (
+          <TouchableOpacity
+            key={slot.slot}
+            style={[
+              styles.slotPill,
+              isSelected && styles.slotPillActive,
+              (isFull || isPast) && styles.slotPillDisabled,
+            ]}
+            disabled={isFull || isPast}
+            onPress={() => onSelect(slot.slot)}
+          >
+            <Text style={[
+              styles.slotText,
+              isSelected && styles.slotTextActive,
+              (isFull || isPast) && styles.slotTextDisabled,
+            ]}>
+              {slot.slot}
+            </Text>
+            {isFull && <Text style={styles.slotTagFull}>Full</Text>}
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
 export default function CheckoutScreen() {
   const router = useRouter();
   const { totalAmount, totalItems } = useCartStore();
@@ -53,6 +120,11 @@ export default function CheckoutScreen() {
 
   const [pickupDate, setPickupDate] = useState(availableDates[0]?.value);
   const [pickupSlot, setPickupSlot] = useState(null);
+  const deliveryDates = getDeliveryDates(pickupDate);
+  const [deliveryDate, setDeliveryDate] = useState(null); // defaults to pickup + TURNAROUND_DAYS
+  const [deliverySlot, setDeliverySlot] = useState(null);
+  const [deliverySlotData, setDeliverySlotData] = useState(null);
+  const [deliverySlotsLoading, setDeliverySlotsLoading] = useState(false);
   const [specialInstructions, setSpecialInstructions] = useState("");
   const [couponCode, setCouponCode] = useState("");
   const [paymentMethod, setPaymentMethod] = useState("online"); // online | cod
@@ -114,6 +186,25 @@ export default function CheckoutScreen() {
       .finally(() => setSlotsLoading(false));
   }, [selectedStore?.id, pickupDate]);
 
+  // Pickup date moved → re-anchor delivery to pickup + turnaround (A7)
+  useEffect(() => {
+    if (!pickupDate) return;
+    const options = getDeliveryDates(pickupDate);
+    setDeliveryDate(options[TURNAROUND_DAYS - 1]?.value ?? options[0]?.value ?? null);
+  }, [pickupDate]);
+
+  // Fetch DELIVERY slots for the chosen delivery date
+  useEffect(() => {
+    if (!selectedStore?.id || !deliveryDate) { setDeliverySlotData(null); return; }
+    setDeliverySlotsLoading(true);
+    setDeliverySlot(null);
+    api
+      .get(`/stores/${selectedStore.id}/slots`, { params: { date: deliveryDate } })
+      .then(res => setDeliverySlotData(res.data))
+      .catch(() => setDeliverySlotData(null))
+      .finally(() => setDeliverySlotsLoading(false));
+  }, [selectedStore?.id, deliveryDate]);
+
   const deliveryFee = totalAmount >= FREE_DELIVERY_THRESHOLD ? 0 : DELIVERY_FEE;
   const discount = validationResult?.valid ? validationResult.discount_amount : 0;
   const payableBeforeWallet = Math.max(totalAmount + deliveryFee - discount, 0);
@@ -139,6 +230,7 @@ export default function CheckoutScreen() {
     if (!selectedAddress) { Alert.alert("No Address", "Please add a delivery address."); return; }
     if (!selectedStore) { Alert.alert("Select Store", "Please select a nearby store to handle your order."); return; }
     if (!pickupSlot) { Alert.alert("Pickup Time", "Please select a pickup time slot."); return; }
+    if (!deliveryDate || !deliverySlot) { Alert.alert("Delivery Time", "Please select an estimated delivery slot."); return; }
 
     // Step 1 — create the order. Only this can "fail to place an order".
     setLoading(true);
@@ -147,7 +239,7 @@ export default function CheckoutScreen() {
       order = await createOrder({
         address_id: selectedAddress.id,
         pickup_slot: { date: pickupDate, slot: pickupSlot },
-        delivery_slot: { date: pickupDate, slot: pickupSlot },
+        delivery_slot: { date: deliveryDate, slot: deliverySlot },
         special_instructions: specialInstructions || null,
         coupon_code: validationResult?.valid ? couponCode.trim() : null,
         payment_method: paymentMethod,
@@ -362,54 +454,38 @@ export default function CheckoutScreen() {
               />
             ))}
           </ChipRow>
-          {!selectedStore ? (
-            <Text style={styles.slotHint}>Select a store above to see available slots.</Text>
-          ) : slotsLoading ? (
-            <View style={{ paddingVertical: SPACING.md }}>
-              <ActivityIndicator color={COLORS.forestGreen} />
-            </View>
-          ) : slotData?.closed ? (
-            <View style={styles.slotClosedBox}>
-              <Ionicons name="close-circle" size={16} color={COLORS.error} />
-              <Text style={styles.slotClosedText}>
-                Store closed on this date{slotData.closed_reason ? ` — ${slotData.closed_reason}` : ""}. Pick another day.
-              </Text>
-            </View>
-          ) : !slotData?.slots?.length ? (
-            <Text style={styles.slotHint}>No slots available for this date.</Text>
-          ) : (
-            <View style={styles.slotGrid}>
-              {slotData.slots.map((slot) => {
-                const isFull = !slot.available && !slot.is_past;
-                const isPast = slot.is_past;
-                const isSelected = pickupSlot === slot.slot;
-                return (
-                  <TouchableOpacity
-                    key={slot.slot}
-                    style={[
-                      styles.slotPill,
-                      isSelected && styles.slotPillActive,
-                      (isFull || isPast) && styles.slotPillDisabled,
-                    ]}
-                    disabled={isFull || isPast}
-                    onPress={() => setPickupSlot(slot.slot)}
-                  >
-                    <Text style={[
-                      styles.slotText,
-                      isSelected && styles.slotTextActive,
-                      (isFull || isPast) && styles.slotTextDisabled,
-                    ]}>
-                      {slot.slot}
-                    </Text>
-                    {isFull && <Text style={styles.slotTagFull}>Full</Text>}
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-          )}
+          <SlotPicker
+            hasStore={!!selectedStore}
+            loading={slotsLoading}
+            data={slotData}
+            selected={pickupSlot}
+            onSelect={setPickupSlot}
+          />
+        </View>
+
+        {/* Delivery Schedule (A7 — distinct from pickup, editable) */}
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>Estimated Delivery</Text>
+          <ChipRow style={styles.pillScroll}>
+            {deliveryDates.map((d) => (
+              <Chip
+                key={d.value}
+                label={d.label}
+                active={deliveryDate === d.value}
+                onPress={() => setDeliveryDate(d.value)}
+              />
+            ))}
+          </ChipRow>
+          <SlotPicker
+            hasStore={!!selectedStore}
+            loading={deliverySlotsLoading}
+            data={deliverySlotData}
+            selected={deliverySlot}
+            onSelect={setDeliverySlot}
+          />
           <View style={{ flexDirection: "row", alignItems: "flex-start", backgroundColor: COLORS.mintGreen, padding: SPACING.md, borderRadius: RADIUS.md, marginTop: SPACING.md, gap: SPACING.sm }}>
             <Ionicons name="information-circle-outline" size={16} color={COLORS.forestGreen} style={{ marginTop: 1 }} />
-            <Text style={{ fontSize: 12, color: COLORS.forestGreen, flex: 1, lineHeight: 18 }}>Delivery will be scheduled by WashingBells within 24–48 hrs of pickup. You’ll be notified before delivery.</Text>
+            <Text style={{ fontSize: 12, color: COLORS.forestGreen, flex: 1, lineHeight: 18 }}>Standard turnaround is 48 hrs after pickup. We’ll notify you before the delivery arrives.</Text>
           </View>
         </View>
 
@@ -533,7 +609,7 @@ export default function CheckoutScreen() {
           title={paymentMethod === "cod" ? "Place Order (COD)" : "Pay & Place Order"}
           onPress={handlePlaceOrder}
           loading={loading}
-          disabled={!pickupSlot}
+          disabled={!pickupSlot || !deliverySlot}
           style={{ paddingHorizontal: 24 }}
         />
       </BottomBar>

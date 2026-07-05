@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
 import random, string, math
@@ -8,7 +8,7 @@ from app.core.security import get_current_user
 from app.schemas.schemas import OrderCreate, OrderResponse, RescheduleRequest
 from app.routers.cart import _build_cart_response
 from app.services.push_service import notify_customer_order_update
-from app.services.order_notify_service import send_new_order_notifications
+from app.services.order_notify_service import send_new_order_notifications, dispatch
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 FREE_DELIVERY_THRESHOLD = 299.0
@@ -61,6 +61,35 @@ def _generate_garment_tags(order_number, items):
             tags.append({"tag_code": f"{order_number}-{counter:03d}", "item_name": item["item_name"], "service_name": item["service_name"], "status": "tagged"})
             counter += 1
     return tags
+
+DELIVERY_TURNAROUND_DAYS = 2
+
+def _slot_sort_key(slot_payload):
+    """(date, start-time) tuple for chronological comparison; None if unparseable."""
+    try:
+        d = datetime.strptime(slot_payload["date"], "%Y-%m-%d").date()
+        start = slot_payload["slot"].split("-")[0].strip()
+        h, m = start.split(":")
+        return (d, int(h), int(m))
+    except Exception:
+        return None
+
+def _ensure_distinct_delivery_slot(pickup_slot: dict, delivery_slot: dict) -> dict:
+    """A7: delivery must be a real, later slot — never a copy of pickup.
+
+    Older app builds submit delivery_slot identical to pickup_slot; rejecting
+    them would brick ordering on released binaries, so instead derive the
+    standard turnaround (pickup + 2 days, same hour window) server-side.
+    """
+    pk, dk = _slot_sort_key(pickup_slot), _slot_sort_key(delivery_slot)
+    if pk is not None and dk is not None and dk > pk:
+        return delivery_slot
+    try:
+        pickup_date = datetime.strptime(pickup_slot["date"], "%Y-%m-%d")
+        derived_date = (pickup_date + timedelta(days=DELIVERY_TURNAROUND_DAYS)).strftime("%Y-%m-%d")
+        return {"date": derived_date, "slot": pickup_slot["slot"]}
+    except Exception:
+        return delivery_slot
 
 async def _calc_coupon_discount(db, code, subtotal, user_id):
     """Coupon discount for customer checkout — delegates to the shared
@@ -141,7 +170,9 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         "items": [i.model_dump() for i in cart_response.items],
         "address": {"id": str(address["_id"]), "label": address["label"], "full_address": address["full_address"], "latitude": address["latitude"], "longitude": address["longitude"], "city": address["city"]},
         "pickup_slot": order_data.pickup_slot.model_dump(),
-        "delivery_slot": order_data.delivery_slot.model_dump(),
+        "delivery_slot": _ensure_distinct_delivery_slot(
+            order_data.pickup_slot.model_dump(), order_data.delivery_slot.model_dump()
+        ),
         "special_instructions": order_data.special_instructions,
         "payment_method": pm, "status": initial_status, "payment_status": ps,
         "status_timeline": [{"status": initial_status, "timestamp": now.isoformat(), "note": timeline_note}],
@@ -197,16 +228,16 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         await db.coupons.update_one({"code": order_data.coupon_code.upper()}, {"$inc": {"used_count": 1}})
     await db.carts.delete_one({"user_id": user_id})
     created = await db.orders.find_one({"_id": result.inserted_id})
+    # Fan-out runs in the background — order placement must never wait on
+    # push/email round-trips (a blocking SendGrid call froze checkout for ~30s).
     if initial_status == "pending_payment":
         # A3: nobody is alerted until payment lands — just nudge the customer.
-        try:
-            await notify_customer_order_update(
-                user_id, created["order_number"], "pending_payment",
-                "Order created — complete the payment to send it to the store.",
-            )
-        except Exception: pass
+        dispatch(notify_customer_order_update(
+            user_id, created["order_number"], "pending_payment",
+            "Order created — complete the payment to send it to the store.",
+        ))
     else:
-        await send_new_order_notifications(db, created)
+        dispatch(send_new_order_notifications(db, created))
 
     return _format_order(created)
 
