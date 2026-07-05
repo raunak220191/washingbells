@@ -40,14 +40,14 @@ export default function OrdersScreen() {
     } catch {}
   };
 
-  // Poll every 20 s; detect new `placed` orders and play alert
+  // Poll every 10 s; detect new `placed` orders and play alert
   const pollOrders = React.useCallback(async () => {
     await fetchOrders(activeTab);
   }, [activeTab]);
 
   useEffect(() => {
     pollOrders();
-    const interval = setInterval(pollOrders, 20000);
+    const interval = setInterval(pollOrders, 10000); // A4: ≤10s poll fallback
     return () => clearInterval(interval);
   }, [activeTab]);
 

@@ -17,7 +17,9 @@ export default function DashboardScreen() {
 
   useEffect(() => {
     fetchOrders();
-    const interval = setInterval(fetchOrders, 30000); // poll every 30s
+    // 10s poll — client SLA (A4): a new order must surface in-store within
+    // 10s even if the push notification doesn't arrive.
+    const interval = setInterval(fetchOrders, 10000);
     return () => clearInterval(interval);
   }, []);
 
