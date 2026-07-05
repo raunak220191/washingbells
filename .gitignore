@@ -62,3 +62,9 @@ play-service-account.json
 TEST_CREDENTIALS.md
 TEST_INFO.md
 .weekly-report-key.local
+
+# Secrets — never commit (client rule: keys via .env / EAS secrets only)
+backend/dev.yaml
+*.p8
+play-service-account.json
+asc-api-key.p8
