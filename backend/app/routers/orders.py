@@ -7,8 +7,8 @@ from app.core.database import get_db
 from app.core.security import get_current_user
 from app.schemas.schemas import OrderCreate, OrderResponse, RescheduleRequest
 from app.routers.cart import _build_cart_response
-from app.services.push_service import notify_store_new_order, notify_customer_order_update
-from app.services.email_service import send_event as send_email_event, send_event_to_admins
+from app.services.push_service import notify_customer_order_update
+from app.services.order_notify_service import send_new_order_notifications
 
 router = APIRouter(prefix="/orders", tags=["Orders"])
 FREE_DELIVERY_THRESHOLD = 299.0
@@ -121,7 +121,18 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         wallet_applied = min(order_data.wallet_amount, avail, subtotal + delivery_fee - discount)
     total_amount = max(round(subtotal + delivery_fee - discount - wallet_applied, 2), 0)
     pm = order_data.payment_method or "online"
-    ps = "cod_pending" if pm == "cod" else "pending"
+    # A3: an online order with money still due starts as pending_payment and
+    # alerts nobody until Razorpay confirms (verify or webhook). COD and
+    # fully-wallet-covered orders are payable immediately.
+    if pm == "cod":
+        ps, initial_status = "cod_pending", "placed"
+        timeline_note = "Order placed"
+    elif total_amount <= 0:
+        ps, initial_status = "paid", "placed"
+        timeline_note = "Order placed (paid via wallet)"
+    else:
+        ps, initial_status = "pending", "pending_payment"
+        timeline_note = "Order placed — awaiting payment"
     now = datetime.now(timezone.utc)
     order_number = _generate_order_number()
     garment_tags = _generate_garment_tags(order_number, [i.model_dump() for i in cart_response.items])
@@ -132,8 +143,9 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         "pickup_slot": order_data.pickup_slot.model_dump(),
         "delivery_slot": order_data.delivery_slot.model_dump(),
         "special_instructions": order_data.special_instructions,
-        "payment_method": pm, "status": "placed", "payment_status": ps,
-        "status_timeline": [{"status": "placed", "timestamp": now.isoformat(), "note": "Order placed"}],
+        "payment_method": pm, "status": initial_status, "payment_status": ps,
+        "status_timeline": [{"status": initial_status, "timestamp": now.isoformat(), "note": timeline_note}],
+        "confirmation_notified_at": None,
         "garment_tags": garment_tags, "assigned_agent_id": None, "agent_info": None,
         "pickup_proof_images": [], "delivery_proof_images": [],
         # Phase 2 fields
@@ -185,78 +197,16 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
         await db.coupons.update_one({"code": order_data.coupon_code.upper()}, {"$inc": {"used_count": 1}})
     await db.carts.delete_one({"user_id": user_id})
     created = await db.orders.find_one({"_id": result.inserted_id})
-    # Push notifications + emails — all non-blocking
-    customer = await db.users.find_one({"_id": ObjectId(user_id)})
-    customer_name = (customer.get("name") if customer else None) or "Customer"
-    customer_email = customer.get("email") if customer else None
-    store_doc = None
-    if created.get("store_id"):
-        store_doc = await db.stores.find_one({"_id": ObjectId(created["store_id"])})
-        if store_doc and store_doc.get("owner_user_id"):
-            try:
-                await notify_store_new_order(
-                    store_doc["owner_user_id"], created["order_number"],
-                    customer_name, created["total_amount"],
-                )
-            except Exception: pass
-    try:
-        await notify_customer_order_update(
-            user_id, created["order_number"], "placed",
-            "Order placed successfully! We'll notify you when a store accepts it.",
-        )
-    except Exception: pass
-
-    # Email: order placed → customer
-    try:
-        await send_email_event(
-            "order_placed",
-            to_email=customer_email,
-            audience="customer",
-            user_id=user_id,
-            order_id=str(created["_id"]),
-            context={
-                "customer_name": customer_name,
-                "order_number": created["order_number"],
-                "total_amount": f"{created['total_amount']:.0f}",
-                "items_count": str(sum(i.get("quantity", 1) for i in created.get("items", []))),
-            },
-        )
-    except Exception: pass
-
-    # Email: new order → store owner
-    if store_doc and store_doc.get("owner_user_id"):
+    if initial_status == "pending_payment":
+        # A3: nobody is alerted until payment lands — just nudge the customer.
         try:
-            owner = await db.users.find_one({"_id": ObjectId(store_doc["owner_user_id"])})
-            owner_email = owner.get("email") if owner else None
-            await send_email_event(
-                "new_order_for_store",
-                to_email=owner_email,
-                audience="store",
-                user_id=store_doc["owner_user_id"],
-                order_id=str(created["_id"]),
-                context={
-                    "owner_name": (owner.get("name") if owner else None) or "Store Owner",
-                    "order_number": created["order_number"],
-                    "customer_name": customer_name,
-                    "total_amount": f"{created['total_amount']:.0f}",
-                    "items_count": str(sum(i.get("quantity", 1) for i in created.get("items", []))),
-                    "store_name": store_doc.get("name", ""),
-                },
+            await notify_customer_order_update(
+                user_id, created["order_number"], "pending_payment",
+                "Order created — complete the payment to send it to the store.",
             )
         except Exception: pass
-
-    # Email: new order → admin recipients
-    try:
-        await send_event_to_admins("new_order_admin", order_id=str(created["_id"]), context={
-            "order_number": created["order_number"],
-            "customer_name": customer_name,
-            "customer_phone": current_user.get("phone", ""),
-            "total_amount": f"{created['total_amount']:.0f}",
-            "items_summary": ", ".join(f"{i['item_name']} × {i['quantity']}" for i in created.get("items", [])[:6]),
-            "source": "customer app",
-            "store_name": (store_doc or {}).get("name", "auto-assign"),
-        })
-    except Exception: pass
+    else:
+        await send_new_order_notifications(db, created)
 
     return _format_order(created)
 

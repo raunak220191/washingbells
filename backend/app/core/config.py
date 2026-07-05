@@ -54,6 +54,9 @@ class Settings(BaseSettings):
     # Razorpay
     RAZORPAY_KEY_ID: str = ""
     RAZORPAY_KEY_SECRET: str = ""
+    # Webhook-signature secret from Razorpay dashboard → Webhooks. Empty =
+    # POST /payments/webhook responds 503 (dev machines without a tunnel).
+    RAZORPAY_WEBHOOK_SECRET: str = ""
 
     # Google Maps
     GOOGLE_MAPS_API_KEY: str = ""

@@ -163,6 +163,10 @@ async def get_store_orders(status_filter: str = None, current_user: dict = Depen
     query = {"store_id": str(store["_id"])}
     if status_filter:
         query["status"] = status_filter
+    else:
+        # Unpaid online orders (A3: pending_payment) are invisible to stores —
+        # they enter the queue only once Razorpay confirms the payment.
+        query["status"] = {"$ne": "pending_payment"}
     cursor = db.orders.find(query).sort("created_at", -1)
     orders = await cursor.to_list(length=100)
     result = []

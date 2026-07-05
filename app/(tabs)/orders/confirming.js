@@ -12,7 +12,7 @@ export default function ConfirmingScreen() {
   const router = useRouter();
   const { orderId } = useLocalSearchParams();
 
-  const [phase, setPhase] = useState("polling"); // polling | confirmed | rejected
+  const [phase, setPhase] = useState("polling"); // polling | confirmed | rejected | pending_payment
   const [orderNumber, setOrderNumber] = useState("");
   const [rejectNote, setRejectNote] = useState("");
 
@@ -37,6 +37,10 @@ export default function ConfirmingScreen() {
   }, []);
 
   const intervalRef = useRef(null);
+  // Mirror of `phase` readable inside the poll closure (which captures the
+  // first render's state otherwise).
+  const phaseRef = useRef(phase);
+  useEffect(() => { phaseRef.current = phase; }, [phase]);
 
   useEffect(() => {
     if (!orderId) return;
@@ -52,6 +56,12 @@ export default function ConfirmingScreen() {
           setPhase("confirmed");
           // Auto-navigate to orders list after 2.5 s
           setTimeout(() => router.replace("/(tabs)/orders"), 2500);
+        } else if (order.status === "pending_payment") {
+          // Unpaid online order — the store hasn't been told yet (A3).
+          // Keep polling: the webhook may still flip it to placed.
+          setPhase("pending_payment");
+        } else if (order.status === "placed" && phaseRef.current === "pending_payment") {
+          setPhase("polling");
         } else if (order.status === "rejected" || order.status === "cancelled") {
           clearInterval(intervalRef.current);
           const tl = order.status_timeline || [];
@@ -93,6 +103,33 @@ export default function ConfirmingScreen() {
           onPress={() => router.replace("/(tabs)/basket/checkout")}
         >
           <Text style={styles.retryBtnText}>Choose a Different Store</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.ordersLink}
+          onPress={() => router.replace("/(tabs)/orders")}
+        >
+          <Text style={styles.ordersLinkText}>View My Orders</Text>
+        </TouchableOpacity>
+      </Screen>
+    );
+  }
+
+  if (phase === "pending_payment") {
+    return (
+      <Screen padded={false} contentContainerStyle={styles.center}>
+        <View style={styles.iconRing}>
+          <Ionicons name="card" size={40} color={COLORS.gold} />
+        </View>
+        <Text style={styles.bigTitle}>Payment Pending</Text>
+        <Text style={styles.sub}>
+          {orderNumber ? `Order ${orderNumber} is saved.` : "Your order is saved."} The store
+          will receive it as soon as the payment is completed.
+        </Text>
+        <TouchableOpacity
+          style={styles.retryBtn}
+          onPress={() => router.replace({ pathname: "/(tabs)/orders/[id]", params: { id: orderId } })}
+        >
+          <Text style={styles.retryBtnText}>Complete Payment</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.ordersLink}
