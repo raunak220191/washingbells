@@ -1,0 +1,13 @@
+{
+  "ios_internal_testing": [
+    "hardikvashisht10@gmail.com",
+    "mohitserowa001234@gmail.com",
+    "neenaserowa00@gmail.com",
+    "neenaserowa001234@gmail.com",
+    "dv8901447007@gmail.com",
+    "shannuvashisth@gmail.com",
+    "vashisht.suman1234@gmail.com",
+    "kavyas@meta.com"
+  ],
+  "notes": "Client-collected tester emails for App Store Connect Internal Testing (all three apps). Add via App Store Connect > TestFlight > Internal Testing. Play closed-testing uses the existing opt-in links — do NOT create a new track (the 12-tester/14-day clock must not reset)."
+}

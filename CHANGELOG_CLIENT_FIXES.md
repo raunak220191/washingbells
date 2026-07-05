@@ -78,6 +78,25 @@ test this round) · NEEDS-REPRO (could not reproduce; notes attached).
 | E6 | ✅ | Fractional weights to 0.1 kg across customer cart (float quantities; whole-number rule kept for piece services), walk-in (0.5 steps + decimal input), admin orders (already float), pricing = weight × rate. Basket badge counts a kg line as one item. | `test_e_store_billing.py::test_e6*` | 131beab, c156bf1 |
 | E7 | ✅ decided+implemented | Deliberate choice documented: phone-first layout retained; on iPad the dashboard/orders/billing render as a centered 700pt column (TabletContainer) instead of a stretched phone screen. Full adaptive layouts deferred. | — | c156bf1 |
 
+## Phase F — Rider App
+
+| ID | Status | Fix / Evidence | Commits |
+|----|--------|----------------|---------|
+| F1 | ✅ root-caused; APK build in progress | "App not installed": every rider Android build on EAS is the `production` profile → an **.aab app bundle**, and the mailed links were the raw .aab artifact — Android cannot install an .aab directly. The keystore is EAS-managed (consistent across builds; no local keystores exist — no signature mixing). Fix: distribute the `preview` profile APK (installable link) for direct installs; Play-testing links (which repackage the .aab) for store distribution. A preview APK build was kicked off (first attempt hit an EAS "build complete hook" infra error; retried). | — |
+| F2 | ⚠ PARTIAL | Happy path verified interactively on the Android emulator: rider login → dashboard (Online toggle, stats) → New Assignment → Accept Trip → Pickup Task (4-step tracker) → Start Trip → photo step. **New bug found while recording**: after a cold app restart, `login succeeds server-side (push registration fires) but the rider app stays on the login screen` — root guard fails to navigate (same family as the customer C2 guard bug). Filed for fix before the demo video re-record; diagnostic recordings in `qa-artifacts/2026-07-05/`. | qa commit |
+
+## Phase G — UI/UX Polish
+
+| ID | Status | Fix / Evidence | Commits |
+|----|--------|----------------|---------|
+| G1 | ✅ | Customer tab bar already reserved the bottom inset (prior audit); the same treatment added to RIDER and STORE tab bars (`useSafeAreaInsets`, height + padding). | a11c5ad |
+| G2 | ☑ | Handled by the `Screen` primitive (SafeAreaView top edge + StatusBar) used by every customer screen; store/rider screens use SafeAreaView directly. | earlier |
+| G3 | ☑ | Filter chips are built from categories actually present per service (`constants/categories.js`), `matches()` centralizes subset logic. Verified on web: Premium Laundry "Home" filter returns exactly the Home items. | earlier |
+| G4 | ✅ | Explicit `color` added to every input style that lacked one — checkout **email input** (the exact white-on-white report), wallet custom amount, store hours + OTP inputs. All others audited and already had token colors. | a11c5ad |
+| G5 | NEEDS-DEVICE | Checked: Hermes enabled, no expo-updates (no update-check stall), no synchronous font loading in the boot path, 15s cap on all boot network calls (worst case = slow, never stuck forever). Cold-start profiling needs a physical iOS device — queued for the device pass. The "unlimited usage" message could not be reproduced from code; likely an Expo Go / TestFlight notice — needs the client's screenshot. | — |
+| G6 | ✅ | Store-hours model (`operating_hours` per weekday + holiday closures) already drives slot availability; store owners edit it in-app (Settings → Hours incl. Sunday toggle). Added: ADMIN can now edit weekly hours via PUT /admin/stores. The wrong "Sunday closed" came from the legacy-migration default (Sun=closed) — now flippable by store or admin. | a11c5ad |
+| G7 | ☑ | Fixed under A7: delivery slots are computed after pickup + turnaround, both selectable and distinct. | 000daf9 |
+
 ### Platform caveats (per cross-platform rule)
 
 Backend fixes are platform-independent. Client-side changes (checkout delivery
