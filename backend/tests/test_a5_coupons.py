@@ -5,6 +5,10 @@ Client repro: active coupon in admin was neither listed in the app nor
 accepted on apply; admin orders only allowed a manual discount.
 """
 
+import uuid
+
+import pytest
+
 from conftest import login, place_order
 
 ADMIN_PHONE = "+919999999999"
@@ -14,6 +18,20 @@ def _an_active_coupon(customer) -> dict:
     coupons = customer.get("/coupons/me").json()
     assert coupons, "no active coupons listed — seed has FIRST30/NOCAP10/CAP50"
     return coupons[0]
+
+
+@pytest.fixture(scope="module")
+def fresh_coupon() -> str:
+    """A reusable percent coupon minted for this run — seeded coupons are
+    once-per-user, so re-runs would fail with 'already used'."""
+    admin = login(ADMIN_PHONE)
+    code = f"TEST{uuid.uuid4().hex[:6].upper()}"
+    r = admin.post("/admin/coupons", json={
+        "code": code, "name": "CI test coupon", "type": "percent", "value": 10,
+        "per_user_limit": 1000, "valid_days": 2,  # uncapped percent = D8 shape
+    })
+    assert r.status_code == 200, r.text[:300]
+    return code
 
 
 def test_active_coupons_listed_for_customer(customer):
@@ -26,13 +44,12 @@ def test_active_coupons_listed_for_customer(customer):
                for cp in customer.get("/coupons/me").json()) or True
 
 
-def test_validate_then_order_applies_discount(customer):
-    code = _an_active_coupon(customer)["code"]
-    r = customer.post("/coupons/validate", json={"code": code, "cart_total": 1000})
+def test_validate_then_order_applies_discount(customer, fresh_coupon):
+    r = customer.post("/coupons/validate", json={"code": fresh_coupon, "cart_total": 1000})
     assert r.status_code == 200 and r.json()["valid"], r.text[:200]
 
-    order = place_order(customer, "cod", coupon_code=code)
-    assert order["coupon_code"] == code
+    order = place_order(customer, "cod", coupon_code=fresh_coupon)
+    assert order["coupon_code"] == fresh_coupon
     assert order["discount"] > 0
     expect = round(order["subtotal"] + order["delivery_fee"]
                    - order["discount"] - order["wallet_applied"], 2)
@@ -57,9 +74,9 @@ def test_invalid_coupon_is_a_clean_400(customer):
     customer.client.delete("/cart")  # don't leak the cart into other tests
 
 
-def test_admin_created_order_accepts_coupon(customer):
+def test_admin_created_order_accepts_coupon(customer, fresh_coupon):
     admin = login(ADMIN_PHONE)
-    code = _an_active_coupon(customer)["code"]
+    code = fresh_coupon
     services = customer.get("/services").json()
     svc = services[0]
     r = admin.post("/admin/orders/create", json={

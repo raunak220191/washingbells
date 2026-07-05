@@ -8,6 +8,7 @@ immediately. Whoever confirms first wins: the `confirmation_notified_at`
 guard makes this idempotent, so verify + webhook can both call it safely.
 """
 
+import asyncio
 from datetime import datetime, timezone
 from bson import ObjectId
 
@@ -16,6 +17,21 @@ from app.services.push_service import (
     notify_customer_order_update,
 )
 from app.services.email_service import send_event as send_email_event, send_event_to_admins
+
+
+# Strong refs so fire-and-forget tasks aren't garbage-collected mid-flight.
+_background_tasks: set = set()
+
+
+def dispatch(coro) -> None:
+    """Run a notification coroutine without blocking the caller's request.
+
+    Order placement / payment confirmation must respond in milliseconds; the
+    email+push fan-out can take seconds (external APIs) and its failures are
+    already swallowed per-channel."""
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
 
 
 async def send_new_order_notifications(db, order: dict) -> bool:
@@ -151,5 +167,5 @@ async def confirm_order_paid(db, order: dict, payment_id: str | None, via: str) 
     )
     if res.modified_count:
         fresh = await db.orders.find_one({"_id": order["_id"]})
-        await send_new_order_notifications(db, fresh)
+        dispatch(send_new_order_notifications(db, fresh))
     return new_status

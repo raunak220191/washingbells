@@ -14,6 +14,7 @@ from app.schemas.phase2_schemas import (
 )
 from app.services.push_service import notify_customer_order_update, notify_rider_trip_assigned
 from app.services.email_service import send_event as send_email_event
+from app.services.order_notify_service import dispatch
 
 RIDER_PICKUP_FEE = 40.0  # credited when the store confirms the rider's drop-off
 
@@ -258,7 +259,7 @@ async def accept_order(order_id: str, current_user: dict = Depends(get_current_u
             f"Your order has been confirmed by {store['name']}. A rider will be assigned shortly.",
         )
     except Exception: pass
-    await _email_customer_order_update(db, order, "order_confirmed")
+    dispatch(_email_customer_order_update(db, order, "order_confirmed"))
     return {"message": "Order accepted", "order_number": order["order_number"]}
 
 
@@ -579,7 +580,7 @@ async def mark_ready(order_id: str, current_user: dict = Depends(get_current_use
         "status": "ready_for_delivery", "ready_at": now,
         "status_timeline": tl, "updated_at": now,
     }})
-    await _email_customer_order_update(db, order, "order_ready")
+    dispatch(_email_customer_order_update(db, order, "order_ready"))
     # Push so the customer learns their order is ready (counter pickup vs delivery)
     try:
         if order.get("fulfillment_mode") == "counter_pickup":

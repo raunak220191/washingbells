@@ -93,11 +93,19 @@ def test_webhook_confirms_payment_with_valid_signature(customer, store_owner, db
     assert fresh["payment_status"] == "paid"
     assert order["id"] in _store_queue_ids(store_owner)
 
-    # Notification fan-out claimed exactly once
+    # Notification fan-out is dispatched async — the claim marker lands within
+    # moments of the webhook ack; poll briefly instead of asserting instantly.
     async def notified_at():
         doc = await db.orders.find_one({"_id": ObjectId(order["id"])})
         return doc.get("confirmation_notified_at")
-    assert asyncio.run(notified_at()) is not None
+
+    async def wait_notified():
+        for _ in range(40):
+            if await notified_at() is not None:
+                return True
+            await asyncio.sleep(0.25)
+        return False
+    assert asyncio.run(wait_notified()), "notification fan-out never claimed the order"
 
 
 def test_cod_order_visible_to_store_immediately(customer, store_owner):

@@ -22,6 +22,7 @@ Per-event toggles live in the `email_settings` collection. Each event document:
 Template syntax: Jinja2. Pass a `context` dict when calling send_event(...).
 """
 
+import asyncio
 import logging
 import hmac
 import hashlib
@@ -198,7 +199,10 @@ async def _send_via_sendgrid(to_email: str, subject: str, html: str, text: str) 
         if settings.EMAIL_REPLY_TO:
             message.reply_to = ReplyTo(settings.EMAIL_REPLY_TO)
         client = SendGridAPIClient(settings.SENDGRID_API_KEY)
-        response = client.send(message)
+        # The SendGrid SDK is synchronous — calling it inline blocked uvicorn's
+        # ENTIRE event loop for the full API round-trip (~16s observed), which
+        # froze every concurrent request (orders, store accept, everything).
+        response = await asyncio.to_thread(client.send, message)
         if 200 <= response.status_code < 300:
             return True, None
         return False, f"SendGrid HTTP {response.status_code}: {response.body}"
