@@ -161,8 +161,20 @@ export default function CheckoutScreen() {
 
   useEffect(() => { fetchAddresses(); fetchWallet(); fetchMyCoupons(); return () => clearValidation(); }, []);
 
+  // B4: an empty store list must always say WHY — address not located,
+  // network error, or genuinely no store serving the area.
+  const [storesError, setStoresError] = useState(null); // null | "no_coords" | "network"
+  const [storesRetry, setStoresRetry] = useState(0);
+
   useEffect(() => {
-    if (!selectedAddress?.latitude || !selectedAddress?.longitude) return;
+    if (!selectedAddress) { setNearbyStores([]); setStoresError(null); return; }
+    if (!selectedAddress.latitude || !selectedAddress.longitude) {
+      setNearbyStores([]);
+      setSelectedStore(null);
+      setStoresError("no_coords");
+      return;
+    }
+    setStoresError(null);
     setSelectedStore(null);
     setStoresLoading(true);
     api
@@ -172,9 +184,9 @@ export default function CheckoutScreen() {
         params: { lat: selectedAddress.latitude, lng: selectedAddress.longitude },
       })
       .then((res) => setNearbyStores(res.data))
-      .catch(() => setNearbyStores([]))
+      .catch(() => { setNearbyStores([]); setStoresError("network"); })
       .finally(() => setStoresLoading(false));
-  }, [selectedAddress?.id]);
+  }, [selectedAddress?.id, storesRetry]);
 
   // Fetch slots when store + date are selected
   useEffect(() => {
@@ -397,10 +409,31 @@ export default function CheckoutScreen() {
                 <ActivityIndicator size="small" color={COLORS.gold} />
                 <Text style={styles.storeLoaderText}>Finding stores near you...</Text>
               </View>
+            ) : storesError === "no_coords" ? (
+              <View style={styles.noStoreBox}>
+                <Ionicons name="location-outline" size={24} color={COLORS.textMuted} />
+                <Text style={styles.noStoreText}>
+                  We couldn't place this address on the map, so stores can't be matched.
+                  Edit the address and use "Detect my location", or add a landmark/pincode.
+                </Text>
+                <TouchableOpacity style={styles.noStoreAction} onPress={() => router.push("/(tabs)/home/address")}>
+                  <Text style={styles.noStoreActionText}>Edit Address</Text>
+                </TouchableOpacity>
+              </View>
+            ) : storesError === "network" ? (
+              <View style={styles.noStoreBox}>
+                <Ionicons name="cloud-offline-outline" size={24} color={COLORS.textMuted} />
+                <Text style={styles.noStoreText}>Couldn't load stores — check your connection.</Text>
+                <TouchableOpacity style={styles.noStoreAction} onPress={() => setStoresRetry((n) => n + 1)}>
+                  <Text style={styles.noStoreActionText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
             ) : nearbyStores.length === 0 ? (
               <View style={styles.noStoreBox}>
                 <Ionicons name="storefront-outline" size={24} color={COLORS.textMuted} />
-                <Text style={styles.noStoreText}>No stores available in your area right now.</Text>
+                <Text style={styles.noStoreText}>
+                  No WashingBells store serves this address yet — we're expanding soon.
+                </Text>
               </View>
             ) : (
               nearbyStores.map((store) => {
@@ -695,7 +728,9 @@ const styles = StyleSheet.create({
   // Store selection
   storeLoader: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, padding: SPACING.lg },
   storeLoaderText: { fontSize: 13, color: COLORS.textMuted },
-  noStoreBox: { flexDirection: "row", alignItems: "center", gap: SPACING.md, padding: SPACING.lg, backgroundColor: COLORS.white, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
+  noStoreBox: { flexDirection: "row", alignItems: "center", flexWrap: "wrap", gap: SPACING.md, padding: SPACING.lg, backgroundColor: COLORS.white, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border },
+  noStoreAction: { backgroundColor: COLORS.forestGreen, paddingVertical: SPACING.sm, paddingHorizontal: SPACING.lg, borderRadius: RADIUS.full },
+  noStoreActionText: { color: COLORS.white, fontWeight: "700", fontSize: 13 },
   noStoreText: { fontSize: 13, color: COLORS.textMuted, flex: 1 },
   storeCard: { flexDirection: "row", alignItems: "center", backgroundColor: COLORS.white, borderRadius: RADIUS.md, borderWidth: 1.5, borderColor: COLORS.border, padding: SPACING.lg, marginBottom: SPACING.sm },
   storeCardSelected: { borderColor: COLORS.forestGreen, backgroundColor: COLORS.mintGreen },
