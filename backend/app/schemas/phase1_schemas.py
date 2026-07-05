@@ -44,7 +44,10 @@ class CouponResponse(BaseModel):
     type: str
     value: float
     min_order: float
-    max_discount: float
+    # None = uncapped percent coupon (D8). A required float here 500'd the
+    # whole /coupons/me list the moment one uncapped coupon existed — which is
+    # why the app showed no coupons at all (client bug A5).
+    max_discount: float | None = None
     valid_to: datetime
     is_referral: bool = False
 

@@ -43,7 +43,7 @@ export default function CheckoutScreen() {
   const { totalAmount, totalItems } = useCartStore();
   const { createOrder } = useOrderStore();
   const { addresses, selectedAddress, fetchAddresses } = useAddressStore();
-  const { validationResult, validateCoupon, clearValidation } = useCouponStore();
+  const { validationResult, validateCoupon, clearValidation, myCoupons, fetchMyCoupons } = useCouponStore();
   const { balance: walletBalance, fetchWallet } = useWalletStore();
   const { user, updateProfile } = useAuthStore();
   const availableDates = getAvailableDates();
@@ -87,7 +87,7 @@ export default function CheckoutScreen() {
     } finally { setEmailSaving(false); }
   };
 
-  useEffect(() => { fetchAddresses(); fetchWallet(); return () => clearValidation(); }, []);
+  useEffect(() => { fetchAddresses(); fetchWallet(); fetchMyCoupons(); return () => clearValidation(); }, []);
 
   useEffect(() => {
     if (!selectedAddress?.latitude || !selectedAddress?.longitude) return;
@@ -124,6 +124,12 @@ export default function CheckoutScreen() {
   const handleValidateCoupon = async () => {
     if (!couponCode.trim()) return;
     await validateCoupon(couponCode.trim(), totalAmount);
+  };
+
+  // Tap-to-apply from the available-coupons strip (A5)
+  const handleApplyCoupon = async (code) => {
+    setCouponCode(code);
+    await validateCoupon(code, totalAmount);
   };
 
   const goToConfirming = (orderId) =>
@@ -424,6 +430,18 @@ export default function CheckoutScreen() {
         {/* Coupon Code */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Coupon Code</Text>
+          {myCoupons.length > 0 && (
+            <ChipRow style={{ marginBottom: SPACING.sm }}>
+              {myCoupons.map((c) => (
+                <Chip
+                  key={c.code}
+                  label={c.name ? `${c.code} — ${c.name}` : c.code}
+                  active={couponCode === c.code && !!validationResult?.valid}
+                  onPress={() => handleApplyCoupon(c.code)}
+                />
+              ))}
+            </ChipRow>
+          )}
           <View style={styles.couponRow}>
             <TextInput
               style={styles.couponInput}
