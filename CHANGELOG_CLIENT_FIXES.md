@@ -32,6 +32,15 @@ test this round) · NEEDS-REPRO (could not reproduce; notes attached).
 - New backend test harness: `backend/tests/` (pytest, runs against the live
   local stack per project rule "test backends through the API"). 21 tests.
 
+## Phase B — Store Discovery & Location
+
+| ID | Status | Fix / Evidence | Test | Commits |
+|----|--------|----------------|------|---------|
+| B1 | ✅ | Root cause of "30 km radius but no store found": `/stores/nearby` filtered by a CLIENT-supplied radius (app hardcoded 15 km) and ignored the store's admin-configured `geo_radius_km`. Now: GeoJSON `location` mirror + 2dsphere index (startup-created, idempotent backfill), `$geoNear` + per-store radius match, nearest first; location synced on every store create/update/pin; app stops sending radius (old builds' param accepted & ignored). Boundary-tested at ~28 km (match) / ~33 km (no match) for a 30 km store. | `test_b1_geo_matching.py` | 624ca48 |
+| B2 | ✅ | Nobody types lat/long. Found & killed the customer app's silent `latitude \|\| 30.9` fallback that pinned every no-GPS address to **Ludhiana** (then store matching "found nothing" — feeds B1's repro). Chain now: GPS → on-device geocode of the typed address → server-side Google Geocoding (active when `GOOGLE_MAPS_API_KEY` set; India-biased) → null + explained empty-state (B4). Admin rider-delivery orders geocode server-side before falling back to store area. | `test_b2_address_geocode.py` | 264e3c1 |
+| B3 | ✅ | Pin-location crash: **no Google Maps API key configured in any app's Android config** — react-native-maps crashes natively when MapView mounts without one. Expo Go bundles its own key, which is why dev tests (May) worked but the distributed APK crashed. MapView now guarded behind a maps-key check with a GPS capture fallback; permanent fix = add the client's Maps key to `app.json → android.config.googleMaps.apiKey` (release-checklist item; needs client's Google Cloud console). Maestro regression flow queued for the device pass. | guard in `store/lib/maps.js` | f1979ce |
+| B4 | ✅ | Empty store lists now explain why: address unlocatable (Edit Address CTA), network failure (Retry CTA), or genuinely unserved area. Root causes of the silent empties were B1's client-radius filter and B2's Ludhiana default; `/stores/nearby` also gained a linear-scan fallback if the geo index is ever unavailable. | covered by B1/B2 tests + web smoke | 624ca48, 264e3c1 |
+
 ### Platform caveats (per cross-platform rule)
 
 Backend fixes are platform-independent. Client-side changes (checkout delivery
