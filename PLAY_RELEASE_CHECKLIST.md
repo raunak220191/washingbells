@@ -39,12 +39,12 @@ eas submit --platform android --latest        # track: closed testing (already c
 - [ ] Verify each artifact: download the .aab is for Play only; for direct
       installs ALWAYS share the `preview`-profile APK link (F1: mailed .aab
       links were the "app not installed" bug).
-- [ ] **Known issue (2026-07-05):** two rider `--profile preview` builds
-      errored in EAS's own "Build complete hook" phase (no hooks are
-      configured in the project — EAS-side processing). Production .aab
-      builds succeed. Retry `eas build -p android --profile preview` in
-      `rider/`; if it persists, check expo.dev status / support with build
-      ids 6629f15b… and 68896cf1….
+- [ ] **Gotcha (root-caused 2026-07-06):** building rider/store from their
+      dirs FAILS with "package.json does not exist in …/build/rider" unless
+      you first swap the repo-root `.easignore` for the app-scoped variant:
+      `cp .easignore-rider .easignore && (cd rider && EAS_NO_VCS=1 eas build …) && git checkout .easignore`
+      (same with `.easignore-store`). The root file scopes CUSTOMER builds
+      and strips rider/ + store/ from the archive.
 - [ ] Install the preview APK on one physical device per app before sharing.
 
 ## Play Console (owner)
