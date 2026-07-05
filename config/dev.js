@@ -9,6 +9,6 @@
 // After changing: shake device in Expo Go → Reload
 // ============================================================
 
-const DEV_BACKEND_URL = "http://192.168.1.41:8000";
+const DEV_BACKEND_URL = "http://localhost:8000";
 
 export default DEV_BACKEND_URL;

@@ -54,6 +54,10 @@ async function doLogin(page, phone, password) {
   await page.goto(BASE, { waitUntil: "domcontentloaded", timeout: 90000 });
   await waitForApp(page);
   await page.fill('input[placeholder="Enter mobile number"]', phone);
+  // The login screen defaults to OTP mode; the password field is behind the
+  // "Login with password instead" toggle.
+  const toggle = page.getByText("Login with password instead", { exact: false });
+  if (await toggle.count()) await toggle.click();
   await page.fill('input[placeholder="Password"]', password);
   log(`submitting login for ${phone}…`);
   await page.getByText("Login with Password", { exact: false }).click();
@@ -102,6 +106,32 @@ async function main() {
       await waitForApp(page).catch(() => log("login markers not found (route may differ); screenshotting anyway"));
       await page.waitForTimeout(1500);
       await shot(page, out);
+    } else if (cmd === "authshot") {
+      // Log in, then navigate to a route in the SAME context (goto alone runs
+      // logged-out) and screenshot it. Usage: authshot <phone> <pass> <route> <out>
+      // Optional 5th arg: semicolon-separated actions, e.g.
+      //   "click:WashingBells Express;scroll:1200;click:Tomorrow"
+      const [phone, password, route, out = "/tmp/wb-authshot.png", actionsArg = ""] = rest;
+      if (!phone || !password || !route) throw new Error("authshot needs <phone> <password> <route>");
+      await doLogin(page, phone, password);
+      await page.goto(BASE + "/" + route.replace(/^\//, ""), { waitUntil: "domcontentloaded", timeout: 90000 });
+      await page.waitForTimeout(4000);
+      for (const action of actionsArg.split(";").filter(Boolean)) {
+        const [verb, ...valParts] = action.split(":");
+        const val = valParts.join(":");
+        if (verb === "click") {
+          await page.getByText(val, { exact: false }).first().click({ timeout: 10000 });
+          await page.waitForTimeout(2500);
+          log(`clicked ${JSON.stringify(val)}`);
+        } else if (verb === "scroll") {
+          await page.mouse.wheel(0, parseInt(val, 10) || 800);
+          await page.waitForTimeout(1200);
+          log(`scrolled ${val}px`);
+        }
+      }
+      await shot(page, out);
+      const text = await page.innerText("body");
+      log("body sample:", JSON.stringify(text.slice(0, 250)));
     } else if (cmd === "login") {
       const [phone, password, out = "/tmp/wb-login.png"] = rest;
       if (!phone || !password) throw new Error("login needs <phone> <password>");
