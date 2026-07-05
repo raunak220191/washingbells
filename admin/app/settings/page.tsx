@@ -112,6 +112,7 @@ export default function SettingsPage() {
                 <Field label="Delivery Fee (₹)" field="delivery_fee" suffix="₹" />
                 <Field label="Free Delivery Threshold (₹)" field="free_delivery_threshold" suffix="₹" />
                 <Field label="Platform Commission (%)" field="platform_commission_pct" suffix="%" />
+                <Field label="Platform Fee (flat ₹ per order, 0 = none)" field="platform_fee" suffix="₹" />
                 <Field label="Rider Pickup Fee (₹)" field="rider_pickup_fee" suffix="₹" />
                 <Field label="Rider Delivery Fee (₹)" field="rider_delivery_fee" suffix="₹" />
                 <Field label="Minimum Order Value (₹)" field="min_order_value" suffix="₹" />

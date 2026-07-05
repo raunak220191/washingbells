@@ -3,10 +3,11 @@ import { useEffect, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
 import EditEntityModal from "@/components/EditEntityModal";
+import ResetPasswordModal from "@/components/ResetPasswordModal";
 import api from "@/lib/api";
 import {
   CheckCircle, XCircle, RefreshCw, MapPin, FileText,
-  Phone, Truck, Plus, X, Eye, Clock, TrendingUp, Pencil,
+  Phone, Truck, Plus, X, Eye, Clock, TrendingUp, Pencil, KeyRound,
 } from "lucide-react";
 
 type Rider = {
@@ -62,6 +63,7 @@ export default function RidersPage() {
   const [addForm, setAddForm] = useState({ name: "", phone: "", vehicle_type: "bike", vehicle_number: "" });
   const [addLoading, setAddLoading] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [resettingPw, setResettingPw] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -250,6 +252,12 @@ export default function RidersPage() {
               <h2 className="text-lg font-bold text-gray-900">Rider Details</h2>
               <div className="flex items-center gap-2">
                 {selectedRider && (
+                  <button onClick={() => setResettingPw(true)}
+                    className="flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold">
+                    <KeyRound size={12} /> Reset Password
+                  </button>
+                )}
+                {selectedRider && (
                   <button onClick={() => setEditing(true)}
                     className="flex items-center gap-1.5 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-semibold">
                     <Pencil size={12} /> Edit
@@ -433,6 +441,16 @@ export default function RidersPage() {
           }}
           onClose={() => setEditing(false)}
           onSaved={() => { openDetail(selectedRider.id); load(); }}
+        />
+      )}
+
+      {/* ── Reset Rider Password Modal ── */}
+      {resettingPw && selectedRider && (
+        <ResetPasswordModal
+          key={selectedRider.id}
+          userId={selectedRider.id}
+          userLabel={selectedRider.name || selectedRider.phone}
+          onClose={() => setResettingPw(false)}
         />
       )}
 

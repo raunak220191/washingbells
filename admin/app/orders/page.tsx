@@ -7,6 +7,7 @@ import api from "@/lib/api";
 import {
   Search, RefreshCw, X, Printer, MapPin, Phone, Truck,
   Tag as TagIcon, Image as ImageIcon, History, Package, Store as StoreIcon, Pencil,
+  CalendarClock,
 } from "lucide-react";
 
 const STATUSES = [
@@ -127,6 +128,13 @@ export default function OrdersPage() {
   const [lightbox, setLightbox] = useState<PhotoRef | null>(null);
   const [editingBill, setEditingBill] = useState(false);
 
+  // D1: reschedule pickup/delivery slots
+  const [rescheduling, setRescheduling] = useState(false);
+  const [rsForm, setRsForm] = useState({ pickupDate: "", pickupSlot: "", deliveryDate: "", deliverySlot: "" });
+  const [rsInitial, setRsInitial] = useState(rsForm);
+  const [rsSaving, setRsSaving] = useState(false);
+  const [rsError, setRsError] = useState("");
+
   const load = async () => {
     setLoading(true);
     try {
@@ -167,6 +175,42 @@ export default function OrdersPage() {
     } catch (e: any) {
       alert(e?.response?.data?.detail || "Failed");
     }
+  };
+
+  const openReschedule = () => {
+    if (!detail) return;
+    const initial = {
+      pickupDate: detail.pickup_slot?.date || "",
+      pickupSlot: detail.pickup_slot?.slot || "",
+      deliveryDate: detail.delivery_slot?.date || "",
+      deliverySlot: detail.delivery_slot?.slot || "",
+    };
+    setRsForm(initial);
+    setRsInitial(initial);
+    setRsError("");
+    setRescheduling(true);
+  };
+
+  const handleReschedule = async () => {
+    if (!selectedId) return;
+    const pickupChanged = rsForm.pickupDate !== rsInitial.pickupDate || rsForm.pickupSlot !== rsInitial.pickupSlot;
+    const deliveryChanged = rsForm.deliveryDate !== rsInitial.deliveryDate || rsForm.deliverySlot !== rsInitial.deliverySlot;
+    if (!pickupChanged && !deliveryChanged) { setRsError("Nothing changed."); return; }
+    if (pickupChanged && (!rsForm.pickupDate || !rsForm.pickupSlot)) { setRsError("Pickup needs both a date and a slot."); return; }
+    if (deliveryChanged && (!rsForm.deliveryDate || !rsForm.deliverySlot)) { setRsError("Delivery needs both a date and a slot."); return; }
+    // Only send the parts the admin actually changed
+    const body: Record<string, { date: string; slot: string }> = {};
+    if (pickupChanged) body.pickup_slot = { date: rsForm.pickupDate, slot: rsForm.pickupSlot };
+    if (deliveryChanged) body.delivery_slot = { date: rsForm.deliveryDate, slot: rsForm.deliverySlot };
+    setRsSaving(true); setRsError("");
+    try {
+      await api.put(`/orders/${selectedId}/reschedule`, body);
+      setRescheduling(false);
+      await openDetail(selectedId);
+      load();
+    } catch (e: any) {
+      setRsError(e?.response?.data?.detail || "Failed to reschedule");
+    } finally { setRsSaving(false); }
   };
 
   const loadRiders = async () => {
@@ -421,16 +465,22 @@ export default function OrdersPage() {
                     {detail.wallet_applied > 0 && <div className="flex justify-between text-purple-700"><span>Wallet</span><span>−₹{detail.wallet_applied?.toFixed(0)}</span></div>}
                     <div className="flex justify-between font-bold text-gray-900 pt-1 border-t border-gray-200"><span>Total</span><span>₹{detail.total_amount?.toFixed(0)}</span></div>
                   </div>
-                  <div className="mt-3 grid grid-cols-2 gap-2">
+                  <div className="mt-3 grid grid-cols-3 gap-2">
                     <button
                       onClick={() => setEditingBill(true)}
-                      className="flex items-center justify-center gap-1.5 bg-amber-100 text-amber-700 text-sm font-semibold px-3 py-2 rounded-lg hover:bg-amber-200 transition-colors"
+                      className="flex items-center justify-center gap-1.5 bg-amber-100 text-amber-700 text-sm font-semibold px-2 py-2 rounded-lg hover:bg-amber-200 transition-colors"
                     >
                       <Pencil size={13} /> Edit Bill
                     </button>
                     <button
+                      onClick={openReschedule}
+                      className="flex items-center justify-center gap-1.5 bg-blue-100 text-blue-700 text-sm font-semibold px-2 py-2 rounded-lg hover:bg-blue-200 transition-colors"
+                    >
+                      <CalendarClock size={13} /> Reschedule
+                    </button>
+                    <button
                       onClick={handleViewInvoice}
-                      className="flex items-center justify-center gap-1.5 bg-green-600 text-white text-sm font-semibold px-3 py-2 rounded-lg hover:bg-green-700 transition-colors"
+                      className="flex items-center justify-center gap-1.5 bg-green-600 text-white text-sm font-semibold px-2 py-2 rounded-lg hover:bg-green-700 transition-colors"
                     >
                       <Printer size={13} /> GST Invoice
                     </button>
@@ -583,6 +633,56 @@ export default function OrdersPage() {
       )}
 
       <PhotoLightbox photo={lightbox} onClose={() => setLightbox(null)} />
+
+      {/* ── Reschedule Modal (D1) ── */}
+      {rescheduling && detail && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => !rsSaving && setRescheduling(false)}>
+          <div className="bg-white rounded-2xl shadow-2xl w-[440px] p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-bold text-gray-900 flex items-center gap-2">
+                <CalendarClock size={16} className="text-blue-600" /> Reschedule {detail.order_number}
+              </h3>
+              <button onClick={() => !rsSaving && setRescheduling(false)} className="p-1 rounded-lg hover:bg-gray-100"><X size={18} /></button>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Pickup</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" value={rsForm.pickupDate}
+                    onChange={e => setRsForm(f => ({ ...f, pickupDate: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+                  <input type="text" value={rsForm.pickupSlot} placeholder="10:00 - 11:00"
+                    onChange={e => setRsForm(f => ({ ...f, pickupSlot: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+                </div>
+                <p className="text-[11px] text-gray-400 mt-1">Pickup can only be moved before the clothes are collected.</p>
+              </div>
+              <div>
+                <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Delivery</div>
+                <div className="grid grid-cols-2 gap-2">
+                  <input type="date" value={rsForm.deliveryDate}
+                    onChange={e => setRsForm(f => ({ ...f, deliveryDate: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+                  <input type="text" value={rsForm.deliverySlot} placeholder="16:00 - 17:00"
+                    onChange={e => setRsForm(f => ({ ...f, deliverySlot: e.target.value }))}
+                    className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500" />
+                </div>
+              </div>
+            </div>
+            {rsError && <p className="text-red-500 text-sm mt-3">{rsError}</p>}
+            <div className="flex gap-2 mt-5">
+              <button onClick={() => setRescheduling(false)} disabled={rsSaving}
+                className="flex-1 border border-gray-200 py-2.5 rounded-lg text-sm text-gray-600 hover:bg-gray-50 transition-colors disabled:opacity-40">
+                Cancel
+              </button>
+              <button onClick={handleReschedule} disabled={rsSaving}
+                className="flex-1 bg-amber-500 disabled:opacity-40 text-white py-2.5 rounded-lg text-sm font-semibold hover:bg-amber-400 transition-colors">
+                {rsSaving ? "Saving…" : "Reschedule"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {editingBill && detail && (
         <EditBillModal

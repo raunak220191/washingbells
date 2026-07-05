@@ -4,10 +4,13 @@ import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
 import AddCustomerModal from "@/components/AddCustomerModal";
 import EditEntityModal from "@/components/EditEntityModal";
+import ResetPasswordModal from "@/components/ResetPasswordModal";
+import AddressModal, { type EditableAddress } from "@/components/AddressModal";
 import api from "@/lib/api";
 import {
   RefreshCw, X, Eye, Phone, Mail, MapPin, Wallet, ShoppingBag,
   Gift, Users as UsersIcon, FileCheck, Truck, History, UserPlus, Pencil,
+  KeyRound, Plus, Trash2,
 } from "lucide-react";
 
 type UserRow = {
@@ -80,6 +83,9 @@ export default function CustomersPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [showAdd, setShowAdd] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [resettingPw, setResettingPw] = useState(false);
+  // D2: address add/edit modal — null = closed, "new" = add, object = edit
+  const [addrEditing, setAddrEditing] = useState<"new" | EditableAddress | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -103,6 +109,17 @@ export default function CustomersPage() {
       alert(e?.response?.data?.detail || "Failed to load user detail");
       setSelectedId(null);
     } finally { setDetailLoading(false); }
+  };
+
+  const deleteAddress = async (addressId: string) => {
+    if (!detail) return;
+    if (!confirm("Delete this address?")) return;
+    try {
+      await api.delete(`/admin/users/${detail.id}/addresses/${addressId}`);
+      openDetail(detail.id);
+    } catch (e: any) {
+      alert(e?.response?.data?.detail || "Failed to delete address");
+    }
   };
 
   const filtered = useMemo(() => users.filter(u =>
@@ -221,6 +238,12 @@ export default function CustomersPage() {
               </div>
               <div className="flex items-center gap-2">
                 {detail && (
+                  <button onClick={() => setResettingPw(true)}
+                    className="flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold">
+                    <KeyRound size={12} /> Reset Password
+                  </button>
+                )}
+                {detail && (
                   <button onClick={() => setEditing(true)}
                     className="flex items-center gap-1.5 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-semibold">
                     <Pencil size={12} /> Edit
@@ -338,26 +361,44 @@ export default function CustomersPage() {
                   </div>
                 )}
 
-                {/* Addresses */}
-                {detail.addresses && detail.addresses.length > 0 && (
-                  <div className="bg-gray-50 rounded-xl p-4">
-                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
-                      <MapPin size={11} /> Addresses ({detail.addresses.length})
+                {/* Addresses (D2: editable) */}
+                <div className="bg-gray-50 rounded-xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <MapPin size={11} /> Addresses ({detail.addresses?.length || 0})
                     </div>
+                    <button onClick={() => setAddrEditing("new")}
+                      className="flex items-center gap-1 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-2 py-1 rounded-lg font-semibold">
+                      <Plus size={11} /> Add
+                    </button>
+                  </div>
+                  {(!detail.addresses || detail.addresses.length === 0) ? (
+                    <div className="text-xs text-gray-400 italic">No addresses on file.</div>
+                  ) : (
                     <div className="space-y-2">
                       {detail.addresses.map(a => (
                         <div key={a.id} className="text-sm bg-white border border-gray-100 rounded-lg p-2.5">
                           <div className="flex items-center gap-2">
                             <span className="text-xs font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{a.label}</span>
                             {a.is_default && <span className="text-xs font-bold text-green-700 bg-green-50 px-1.5 py-0.5 rounded">Default</span>}
+                            <span className="ml-auto flex items-center gap-1">
+                              <button onClick={() => setAddrEditing(a)} title="Edit address"
+                                className="p-1 rounded text-gray-400 hover:text-amber-600 hover:bg-amber-50">
+                                <Pencil size={12} />
+                              </button>
+                              <button onClick={() => deleteAddress(a.id)} title="Delete address"
+                                className="p-1 rounded text-gray-400 hover:text-red-500 hover:bg-red-50">
+                                <Trash2 size={12} />
+                              </button>
+                            </span>
                           </div>
                           <div className="text-xs text-gray-600 mt-1">{a.full_address}</div>
                           <div className="text-xs text-gray-400 mt-0.5">{a.city} {a.pincode}</div>
                         </div>
                       ))}
                     </div>
-                  </div>
-                )}
+                  )}
+                </div>
 
                 {/* Orders */}
                 {detail.orders && detail.orders.length > 0 && (
@@ -434,6 +475,25 @@ export default function CustomersPage() {
           initial={{ name: detail.name ?? "", phone: detail.phone ?? "", email: detail.email ?? "" }}
           onClose={() => setEditing(false)}
           onSaved={() => { openDetail(detail.id); load(); }}
+        />
+      )}
+
+      {resettingPw && detail && (
+        <ResetPasswordModal
+          key={detail.id}
+          userId={detail.id}
+          userLabel={detail.name || detail.phone}
+          onClose={() => setResettingPw(false)}
+        />
+      )}
+
+      {addrEditing && detail && (
+        <AddressModal
+          key={addrEditing === "new" ? `new-${detail.id}` : addrEditing.id}
+          userId={detail.id}
+          address={addrEditing === "new" ? null : addrEditing}
+          onClose={() => setAddrEditing(null)}
+          onSaved={() => openDetail(detail.id)}
         />
       )}
     </PageLayout>

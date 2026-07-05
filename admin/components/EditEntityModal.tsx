@@ -6,8 +6,10 @@ import api from "@/lib/api";
 export type EditField = {
   key: string;
   label: string;
-  type?: "text" | "email" | "tel" | "select";
+  // "heading" renders a full-width group label (no input, never submitted)
+  type?: "text" | "email" | "tel" | "number" | "select" | "heading";
   options?: { value: string; label: string }[];
+  placeholder?: string;
   colSpan?: 1 | 2;
 };
 
@@ -52,7 +54,11 @@ export default function EditEntityModal({ title, endpoint, fields, initial, onCl
         </div>
 
         <div className="grid grid-cols-2 gap-3">
-          {fields.map((f) => (
+          {fields.map((f) => f.type === "heading" ? (
+            <div key={f.key} className="col-span-2 text-xs font-bold text-gray-400 uppercase tracking-wider border-b border-gray-100 pb-1 mt-2">
+              {f.label}
+            </div>
+          ) : (
             <div key={f.key} className={f.colSpan === 2 ? "col-span-2" : ""}>
               <label className="text-xs font-semibold text-gray-500 uppercase block mb-1">{f.label}</label>
               {f.type === "select" ? (
@@ -60,7 +66,8 @@ export default function EditEntityModal({ title, endpoint, fields, initial, onCl
                   {(f.options ?? []).map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
                 </select>
               ) : (
-                <input className={cls} type={f.type === "tel" || f.type === "email" ? f.type : "text"}
+                <input className={cls} type={f.type === "tel" || f.type === "email" || f.type === "number" ? f.type : "text"}
+                  placeholder={f.placeholder}
                   value={form[f.key] ?? ""} onChange={(e) => set(f.key, e.target.value)} />
               )}
             </div>

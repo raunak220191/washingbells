@@ -2030,13 +2030,16 @@ async def admin_update_store(store_id: str, body: dict, current_user: dict = Dep
         if f in body:
             updates[f] = body[f]
     for f in ["latitude", "longitude", "geo_radius_km",
-              # D10 per-store fee overrides (empty string clears -> handled below)
               "delivery_fee_override", "free_delivery_threshold_override", "platform_fee_override"]:
         if body.get(f) not in (None, ""):
             try:
                 updates[f] = float(body[f])
             except (TypeError, ValueError):
                 pass
+        elif body.get(f) == "" and f.endswith("_override"):
+            # D10: explicit empty string CLEARS a per-store override → back to
+            # the global setting (fee_service treats None as "no override").
+            updates[f] = None
     if not updates:
         raise HTTPException(status_code=400, detail="Nothing to update")
 

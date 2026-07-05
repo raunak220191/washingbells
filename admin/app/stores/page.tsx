@@ -3,10 +3,11 @@ import { useEffect, useState } from "react";
 import PageLayout from "@/components/PageLayout";
 import Badge from "@/components/Badge";
 import EditEntityModal from "@/components/EditEntityModal";
+import ResetPasswordModal from "@/components/ResetPasswordModal";
 import api from "@/lib/api";
 import {
   CheckCircle, XCircle, RefreshCw, MapPin, Phone,
-  Plus, X, Eye, ToggleLeft, ToggleRight, ShoppingBag, Clock, Pencil,
+  Plus, X, Eye, ToggleLeft, ToggleRight, ShoppingBag, Clock, Pencil, KeyRound,
 } from "lucide-react";
 
 type Store = {
@@ -30,6 +31,10 @@ type StoreDetail = Store & {
   state: string | null; pincode: string | null; whatsapp: string | null;
   geo_radius_km: number; active_orders: number;
   owner_email: string | null;
+  upi_id: string | null;
+  bank_account_holder: string | null; bank_account_number: string | null; bank_ifsc: string | null;
+  delivery_fee_override: number | null; free_delivery_threshold_override: number | null;
+  platform_fee_override: number | null;
 };
 
 const STATUS_COLORS: Record<string, string> = {
@@ -57,6 +62,7 @@ export default function StoresPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [editing, setEditing] = useState(false);
+  const [resettingPw, setResettingPw] = useState(false);
   const [addForm, setAddForm] = useState({
     name: "", owner_phone: "", owner_name: "", address: "",
     city: "Ludhiana", pincode: "", store_phone: "",
@@ -272,6 +278,12 @@ export default function StoresPage() {
             <div className="flex items-center justify-between p-5 border-b border-gray-200 sticky top-0 bg-white z-10">
               <h2 className="text-lg font-bold text-gray-900">Store Details</h2>
               <div className="flex items-center gap-2">
+                {selectedStore?.owner_user_id && (
+                  <button onClick={() => setResettingPw(true)}
+                    className="flex items-center gap-1.5 text-xs bg-gray-100 text-gray-700 hover:bg-gray-200 px-3 py-1.5 rounded-lg font-semibold">
+                    <KeyRound size={12} /> Reset Password
+                  </button>
+                )}
                 {selectedStore && (
                   <button onClick={() => setEditing(true)}
                     className="flex items-center gap-1.5 text-xs bg-amber-100 text-amber-700 hover:bg-amber-200 px-3 py-1.5 rounded-lg font-semibold">
@@ -440,6 +452,15 @@ export default function StoresPage() {
                 { value: "inactive", label: "Inactive" },
                 { value: "suspended", label: "Suspended" },
               ] },
+            { key: "_settlement", label: "Settlement", type: "heading" },
+            { key: "upi_id", label: "UPI ID", colSpan: 2, placeholder: "store@upi" },
+            { key: "bank_account_holder", label: "Account holder", colSpan: 2 },
+            { key: "bank_account_number", label: "Account number" },
+            { key: "bank_ifsc", label: "IFSC" },
+            { key: "_fee_overrides", label: "Fee overrides (blank = use global)", type: "heading" },
+            { key: "delivery_fee_override", label: "Delivery fee (₹)", type: "number" },
+            { key: "free_delivery_threshold_override", label: "Free delivery above (₹)", type: "number" },
+            { key: "platform_fee_override", label: "Platform fee (₹)", type: "number" },
           ]}
           initial={{
             name: selectedStore.name ?? "", address: selectedStore.address ?? "",
@@ -448,9 +469,26 @@ export default function StoresPage() {
             opening_time: selectedStore.opening_time ?? "", closing_time: selectedStore.closing_time ?? "",
             geo_radius_km: String(selectedStore.geo_radius_km ?? ""),
             status: selectedStore.status ?? "active",
+            upi_id: selectedStore.upi_id ?? "",
+            bank_account_holder: selectedStore.bank_account_holder ?? "",
+            bank_account_number: selectedStore.bank_account_number ?? "",
+            bank_ifsc: selectedStore.bank_ifsc ?? "",
+            delivery_fee_override: selectedStore.delivery_fee_override != null ? String(selectedStore.delivery_fee_override) : "",
+            free_delivery_threshold_override: selectedStore.free_delivery_threshold_override != null ? String(selectedStore.free_delivery_threshold_override) : "",
+            platform_fee_override: selectedStore.platform_fee_override != null ? String(selectedStore.platform_fee_override) : "",
           }}
           onClose={() => setEditing(false)}
           onSaved={() => { openDetail(selectedStore.id); load(); }}
+        />
+      )}
+
+      {/* ── Reset Owner Password Modal ── */}
+      {resettingPw && selectedStore?.owner_user_id && (
+        <ResetPasswordModal
+          key={selectedStore.owner_user_id}
+          userId={selectedStore.owner_user_id}
+          userLabel={selectedStore.owner_name || selectedStore.owner_phone || selectedStore.name}
+          onClose={() => setResettingPw(false)}
         />
       )}
 

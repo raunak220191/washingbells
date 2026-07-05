@@ -8,6 +8,7 @@ type StoreRow = {
   store_id: string; vendor_code: string; name: string;
   pending_payout: number; total_earnings: number;
   bank_account_number: string | null; bank_ifsc: string | null; bank_account_holder: string | null;
+  upi_id: string | null;
 };
 type PayoutRow = {
   id: string; store_id: string; store_name: string; vendor_code: string;
@@ -98,10 +99,15 @@ export default function PayoutsPage() {
                   <td className="px-4 py-3 font-medium text-gray-900">{s.name}</td>
                   <td className="px-4 py-3 text-xs font-mono text-amber-700">{s.vendor_code}</td>
                   <td className="px-4 py-3 text-xs text-gray-500">
-                    {s.bank_account_number ? (
+                    {(s.bank_account_number || s.upi_id) ? (
                       <div>
-                        <div>{s.bank_account_holder || "—"}</div>
-                        <div className="font-mono">{s.bank_account_number} · {s.bank_ifsc}</div>
+                        {s.bank_account_number && (
+                          <>
+                            <div>{s.bank_account_holder || "—"}</div>
+                            <div className="font-mono">{s.bank_account_number} · {s.bank_ifsc}</div>
+                          </>
+                        )}
+                        {s.upi_id && <div className="font-mono text-purple-700">UPI: {s.upi_id}</div>}
                       </div>
                     ) : <span className="text-red-400">No bank details</span>}
                   </td>

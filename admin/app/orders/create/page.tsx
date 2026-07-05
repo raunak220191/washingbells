@@ -3,7 +3,7 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import {
   UserSearch, Plus, Trash2, ShoppingBag, Receipt, Tags, CheckCircle2,
-  Loader2, PackagePlus,
+  Loader2, PackagePlus, CalendarClock,
 } from "lucide-react";
 import PageLayout from "@/components/PageLayout";
 import api from "@/lib/api";
@@ -40,6 +40,20 @@ const DELIVERY_FEE = 40;
 const inputCls =
   "w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:border-amber-500";
 
+// D12: optional slot pickers — local YYYY-MM-DD (not UTC) so "today" is right
+const localISODate = (d: Date) =>
+  `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+const addDays = (iso: string, n: number) => {
+  const d = new Date(`${iso}T00:00:00`);
+  if (isNaN(d.getTime())) return iso;
+  d.setDate(d.getDate() + n);
+  return localISODate(d);
+};
+const TIME_SLOTS = [
+  "09:00 - 10:00", "10:00 - 11:00", "11:00 - 12:00", "12:00 - 13:00",
+  "14:00 - 15:00", "15:00 - 16:00", "16:00 - 17:00", "17:00 - 18:00", "18:00 - 19:00",
+];
+
 export default function CreateOrderPage() {
   // customer
   const [phone, setPhone] = useState("");
@@ -69,6 +83,19 @@ export default function CreateOrderPage() {
   const [discount, setDiscount] = useState("");
   const [instructions, setInstructions] = useState("");
   const [addr, setAddr] = useState({ full_address: "", city: "" });
+
+  // D12: pickup / delivery slots (optional — backend defaults sensibly)
+  const today = localISODate(new Date());
+  const [pickupDate, setPickupDate] = useState(today);
+  const [pickupSlot, setPickupSlot] = useState("");
+  const [deliveryDate, setDeliveryDate] = useState(addDays(today, 2));
+  const [deliverySlot, setDeliverySlot] = useState("");
+  const [deliveryTouched, setDeliveryTouched] = useState(false);
+  const changePickupDate = (d: string) => {
+    setPickupDate(d);
+    // Delivery follows pickup (+2 days turnaround) until manually changed
+    if (!deliveryTouched && d) setDeliveryDate(addDays(d, 2));
+  };
 
   // submit
   const [submitting, setSubmitting] = useState(false);
@@ -204,6 +231,10 @@ export default function CreateOrderPage() {
         coupon_code: couponCode || undefined,
         discount: manualDiscount || undefined,
       };
+      // D12: only send the slots the admin actually filled in — the backend
+      // defaults pickup to today and delivery to +2 days otherwise.
+      if (pickupDate || pickupSlot) payload.pickup_slot = { date: pickupDate || undefined, slot: pickupSlot || undefined };
+      if (deliveryDate || deliverySlot) payload.delivery_slot = { date: deliveryDate || undefined, slot: deliverySlot || undefined };
       if (fulfillment === "rider_delivery") {
         // No coordinates — riders navigate by the address text; the backend
         // falls back to the store's location for the map pin.
@@ -231,6 +262,9 @@ export default function CreateOrderPage() {
     setCouponCode(""); setDiscount(""); setInstructions("");
     setAddr({ full_address: "", city: "" });
     setWKg("1"); setWG("0");
+    const t = localISODate(new Date());
+    setPickupDate(t); setPickupSlot("");
+    setDeliveryDate(addDays(t, 2)); setDeliverySlot(""); setDeliveryTouched(false);
     setResult(null); setError("");
   };
 
@@ -441,6 +475,39 @@ export default function CreateOrderPage() {
               <textarea className={`${inputCls} resize-none`} rows={2} value={instructions}
                 onChange={(e) => setInstructions(e.target.value)} placeholder="Optional notes for the order" />
             </div>
+          </Section>
+
+          {/* Schedule (D12) */}
+          <Section icon={<CalendarClock size={14} />} title="Schedule (optional)">
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <Label>Pickup date</Label>
+                <input type="date" className={inputCls} value={pickupDate}
+                  onChange={(e) => changePickupDate(e.target.value)} />
+              </div>
+              <div>
+                <Label>Pickup slot</Label>
+                <select className={inputCls} value={pickupSlot} onChange={(e) => setPickupSlot(e.target.value)}>
+                  <option value="">Any time</option>
+                  {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+              <div>
+                <Label>Delivery date</Label>
+                <input type="date" className={inputCls} value={deliveryDate}
+                  onChange={(e) => { setDeliveryDate(e.target.value); setDeliveryTouched(true); }} />
+              </div>
+              <div>
+                <Label>Delivery slot</Label>
+                <select className={inputCls} value={deliverySlot} onChange={(e) => setDeliverySlot(e.target.value)}>
+                  <option value="">Any time</option>
+                  {TIME_SLOTS.map((s) => <option key={s} value={s}>{s}</option>)}
+                </select>
+              </div>
+            </div>
+            <p className="mt-1.5 text-[11px] text-gray-400">
+              Delivery defaults to pickup + 2 days (standard turnaround).
+            </p>
           </Section>
         </div>
 
