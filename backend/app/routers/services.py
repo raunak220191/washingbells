@@ -18,7 +18,10 @@ _CATEGORY_RANK = {c: i for i, c in enumerate(ITEM_CATEGORIES)}
 
 
 def _item_sort_key(item: dict):
-    return (_CATEGORY_RANK.get(item.get("category", "unisex"), len(ITEM_CATEGORIES)),
+    # E3: explicit admin-set sort_order wins; ties fall back to the canonical
+    # category rank + name so untouched catalogs keep their stable order.
+    return (item.get("sort_order") if item.get("sort_order") is not None else 10**6,
+            _CATEGORY_RANK.get(item.get("category", "unisex"), len(ITEM_CATEGORIES)),
             (item.get("name") or "").lower())
 
 
@@ -57,6 +60,9 @@ async def list_services():
     if not services:
         services = await _seed_default_services(db)
 
+    # E3: admin-set sort_order first, then name — deterministic everywhere
+    services.sort(key=lambda s: (s.get("sort_order") if s.get("sort_order") is not None else 10**6,
+                                 (s.get("name") or "").lower()))
     return [_format_service(s) for s in services]
 
 

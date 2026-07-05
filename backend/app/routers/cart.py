@@ -55,7 +55,9 @@ async def _build_cart_response(db, user_id: str) -> CartResponse:
             )
         )
 
-    total_items = sum(i.quantity for i in response_items)
+    # Badge count: kg lines count as ONE item (a 2.2 kg wash is one bag), so
+    # the basket badge stays an integer with fractional weights (E6).
+    total_items = int(sum(1 if i.unit == "kg" else i.quantity for i in response_items))
     total_amount = round(sum(i.subtotal for i in response_items), 2)
 
     return CartResponse(
@@ -90,6 +92,15 @@ async def add_to_cart(
     )
     if not item_exists:
         raise HTTPException(status_code=404, detail="Item not found in this service")
+
+    # E6: weight-priced services take fractional kg (rounded to 0.1);
+    # piece-priced services stay whole numbers.
+    if service.get("pricing_unit") == "kg":
+        item.quantity = round(float(item.quantity), 1)
+    elif float(item.quantity) != int(item.quantity):
+        raise HTTPException(status_code=400, detail="Quantity must be a whole number for this item")
+    else:
+        item.quantity = int(item.quantity)
 
     cart = await db.carts.find_one({"user_id": user_id})
     if not cart:
@@ -158,6 +169,19 @@ async def update_cart_item(
     cart = await db.carts.find_one({"user_id": user_id})
     if not cart:
         raise HTTPException(status_code=404, detail="Cart is empty")
+
+    # E6: same rule as add — fractional only for kg-priced services
+    if update.quantity > 0:
+        try:
+            service = await db.services.find_one({"_id": ObjectId(service_id)}, {"pricing_unit": 1})
+        except Exception:
+            service = None
+        if service and service.get("pricing_unit") == "kg":
+            update.quantity = round(float(update.quantity), 1)
+        elif float(update.quantity) != int(update.quantity):
+            raise HTTPException(status_code=400, detail="Quantity must be a whole number for this item")
+        else:
+            update.quantity = int(update.quantity)
 
     item_found = False
     for idx, ci in enumerate(cart.get("items", [])):

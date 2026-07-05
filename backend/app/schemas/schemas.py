@@ -126,11 +126,13 @@ class ServiceResponse(BaseModel):
 class CartItemAdd(BaseModel):
     service_id: str
     item_id: str
-    quantity: int = Field(..., ge=1, le=50)
+    # E6: float so weight-priced (kg) services take 1.3, 2.2 etc. The cart
+    # endpoint enforces whole numbers for piece-priced services.
+    quantity: float = Field(..., ge=0.1, le=100)
 
 
 class CartItemUpdate(BaseModel):
-    quantity: int = Field(..., ge=0, le=50)
+    quantity: float = Field(..., ge=0, le=100)
 
 
 class CartItemResponse(BaseModel):
@@ -139,7 +141,7 @@ class CartItemResponse(BaseModel):
     item_id: str
     item_name: str
     price: float
-    quantity: int
+    quantity: float  # fractional for kg services (E6)
     subtotal: float
     category: str = "unisex"
     unit: str = "piece"  # from the service's pricing_unit (e.g. "kg")

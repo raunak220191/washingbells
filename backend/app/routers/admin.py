@@ -1328,6 +1328,15 @@ async def get_store_detail(store_id: str, current_user: dict = Depends(get_curre
         "closing_time": store.get("closing_time", "21:00"),
         "total_earnings": store.get("total_earnings", 0.0),
         "pending_payout": store.get("pending_payout", 0.0),
+        # D9 settlement details + D10 fee overrides (read-only echo so the
+        # admin edit form can prefill; written via PUT /admin/stores/{id}).
+        "upi_id": store.get("upi_id"),
+        "bank_account_holder": store.get("bank_account_holder"),
+        "bank_account_number": store.get("bank_account_number"),
+        "bank_ifsc": store.get("bank_ifsc"),
+        "delivery_fee_override": store.get("delivery_fee_override"),
+        "free_delivery_threshold_override": store.get("free_delivery_threshold_override"),
+        "platform_fee_override": store.get("platform_fee_override"),
         "order_count": order_count,
         "active_orders": active_orders,
         "owner_user_id": store.get("owner_user_id"),
@@ -1436,7 +1445,7 @@ async def admin_update_service(service_id: str, body: dict, current_user: dict =
     _require_admin(current_user)
     db = get_db()
     update = {}
-    for field in ["name", "description", "icon", "pricing_unit", "service_type", "active"]:
+    for field in ["name", "description", "icon", "pricing_unit", "service_type", "active", "sort_order"]:
         if field in body:
             update[field] = body[field]
     if not update:
@@ -1487,6 +1496,11 @@ async def admin_update_item(service_id: str, item_id: str, body: dict, current_u
         from app.core.categories import is_valid as _cat_valid
         if _cat_valid(body["category"]):
             update_fields["items.$.category"] = body["category"]
+    if "sort_order" in body:
+        try:
+            update_fields["items.$.sort_order"] = int(body["sort_order"])
+        except (TypeError, ValueError):
+            pass
     if not update_fields:
         raise HTTPException(status_code=400, detail="Nothing to update")
     result = await db.services.update_one(
@@ -2054,6 +2068,7 @@ async def get_platform_settings(current_user: dict = Depends(get_current_user)):
         "delivery_fee": settings.get("delivery_fee", 40),
         "free_delivery_threshold": settings.get("free_delivery_threshold", 299),
         "platform_commission_pct": settings.get("platform_commission_pct", 20),
+        "platform_fee": settings.get("platform_fee", 0),
         "rider_pickup_fee": settings.get("rider_pickup_fee", 40),
         "rider_delivery_fee": settings.get("rider_delivery_fee", 40),
         "min_order_value": settings.get("min_order_value", 99),
@@ -2177,6 +2192,7 @@ async def admin_list_payouts(current_user: dict = Depends(get_current_user)):
             "bank_account_number": s.get("bank_account_number"),
             "bank_ifsc": s.get("bank_ifsc"),
             "bank_account_holder": s.get("bank_account_holder"),
+            "upi_id": s.get("upi_id"),
         })
     store_rows.sort(key=lambda r: r["pending_payout"], reverse=True)
 

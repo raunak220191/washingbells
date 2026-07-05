@@ -927,7 +927,6 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
         delivery_fee = delivery_fee_for(_fee_cfg, subtotal)
     else:
         delivery_fee = 0.0
-    total_amount = round(subtotal + delivery_fee, 2)
 
     # Lookup-or-create the customer
     user = await db.users.find_one({"phone": phone})
@@ -943,6 +942,28 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
     elif name and not user.get("name"):
         await db.users.update_one({"_id": user["_id"]}, {"$set": {"name": name, "updated_at": now}})
     user_id = str(user["_id"])
+
+    # E5: coupon (same validation as the customer app) and/or a manual
+    # percent discount in the store bill. Combined, capped at the subtotal.
+    coupon_code = (body.get("coupon_code") or "").strip().upper() or None
+    coupon_discount = 0.0
+    if coupon_code:
+        from app.routers.coupons import evaluate_coupon
+        ev = await evaluate_coupon(db, coupon_code, subtotal, user_id)
+        if not ev["valid"]:
+            raise HTTPException(status_code=400, detail=ev["message"] or "Invalid coupon")
+        coupon_discount = float(ev["discount_amount"] or 0.0)
+    try:
+        discount_pct = float(body.get("discount_pct") or 0)
+    except (TypeError, ValueError):
+        discount_pct = 0.0
+    if not (0 <= discount_pct <= 100):
+        raise HTTPException(status_code=400, detail="discount_pct must be 0-100")
+    manual_discount = round(subtotal * discount_pct / 100.0, 2)
+    discount = round(min(coupon_discount + manual_discount, subtotal), 2)
+    total_amount = round(subtotal + delivery_fee - discount, 2)
+    if coupon_code:
+        await db.coupons.update_one({"code": coupon_code}, {"$inc": {"used_count": 1}})
 
     # Address — coordinates optional; riders navigate by the address text, so
     # missing coords just fall back to the store's location.
@@ -1004,9 +1025,9 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
         "delivery_otp": None, "delivery_otp_verified": False, "delivered_at": None,
         "store_payout": 0.0, "platform_fee": 0.0, "rider_pickup_fee": 0.0, "rider_delivery_fee": 0.0,
         "customer_rating": None, "customer_review": None,
-        "subtotal": subtotal, "delivery_fee": delivery_fee, "discount": 0.0,
+        "subtotal": subtotal, "delivery_fee": delivery_fee, "discount": discount,
         "wallet_applied": 0.0, "total_amount": total_amount,
-        "coupon_code": None, "razorpay_order_id": None,
+        "coupon_code": coupon_code, "razorpay_order_id": None,
         "created_at": now, "updated_at": now,
     }
     result = await db.orders.insert_one(order_doc)
@@ -1036,9 +1057,15 @@ async def create_walk_in_order(body: dict, current_user: dict = Depends(get_curr
     return {
         "id": str(result.inserted_id),
         "order_number": order_number,
+        "subtotal": subtotal,
+        "delivery_fee": delivery_fee,
+        "discount": discount,
+        "coupon_code": coupon_code,
         "total_amount": total_amount,
         "payment_status": payment_status,
         "fulfillment_mode": fulfillment_mode,
+        "items": [{"item_name": li["item_name"], "quantity": li["quantity"],
+                   "unit": li["unit"], "subtotal": li["subtotal"]} for li in line_items],
         "customer_name": user.get("name"),
         "message": "Walk-in order created",
     }
