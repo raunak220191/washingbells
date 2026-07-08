@@ -68,3 +68,6 @@ backend/dev.yaml
 *.p8
 play-service-account.json
 asc-api-key.p8
+
+# Twilio creds scratch file (never commit)
+app/twilio.txt
