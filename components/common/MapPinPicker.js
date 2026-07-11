@@ -23,6 +23,7 @@ export default function MapPinPicker({ visible, initial, addressText, onConfirm,
   const [source, setSource] = useState(initial ? "map_pin" : null);
   const [locating, setLocating] = useState(false);
   const [geocoding, setGeocoding] = useState(false);
+  const [locError, setLocError] = useState(null);
 
   // Pre-center: existing pin > forward geocode of the typed address > fallback
   useEffect(() => {
@@ -49,16 +50,20 @@ export default function MapPinPicker({ visible, initial, addressText, onConfirm,
 
   const useCurrentLocation = async () => {
     setLocating(true);
+    setLocError(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
+      if (status !== "granted") {
+        setLocError("Location permission denied — pan the map to your address instead.");
+        return;
+      }
       const loc = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.High });
       const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
       setCenter(c);
       setSource("gps");
       mapRef.current?.animateToRegion({ ...c, ...DELTA }, 400);
     } catch {
-      // GPS unavailable — the user can still pan the pin manually
+      setLocError("Couldn't get a GPS fix — pan the map to your address instead.");
     } finally {
       setLocating(false);
     }
@@ -114,6 +119,7 @@ export default function MapPinPicker({ visible, initial, addressText, onConfirm,
             )}
             <Text style={styles.gpsBtnText}>Use current location</Text>
           </TouchableOpacity>
+          {locError && <Text style={styles.locError}>{locError}</Text>}
           <Text style={styles.coords}>
             {center.latitude.toFixed(5)}°, {center.longitude.toFixed(5)}°
           </Text>
@@ -167,4 +173,5 @@ const styles = StyleSheet.create({
   },
   gpsBtnText: { ...TYPE.label, color: COLORS.forestGreen, fontWeight: "700" },
   coords: { ...TYPE.caption, color: COLORS.textMuted, textAlign: "center" },
+  locError: { ...TYPE.caption, color: COLORS.error, textAlign: "center" },
 });

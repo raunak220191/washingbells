@@ -18,7 +18,7 @@
       "bundleIdentifier": "com.washingbells.app",
       "infoPlist": {
         "ITSAppUsesNonExemptEncryption": false,
-        "NSLocationWhenInUseUsageDescription": "WashingBells needs your location to find nearby services and auto-fill your delivery address."
+        "NSLocationWhenInUseUsageDescription": "WashingBells uses your location to find nearby laundry stores and pin your address."
       }
     },
     "android": {

@@ -29,16 +29,22 @@ export default function MapPinPicker({ visible, initial, addressText, onConfirm,
       .finally(() => setBusy(false));
   }, [visible]);
 
+  const [locError, setLocError] = useState(null);
+
   const useCurrentLocation = async () => {
     setBusy(true);
+    setLocError(null);
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== "granted") return;
+      if (status !== "granted") {
+        setLocError("Location permission denied — the typed address will be used instead.");
+        return;
+      }
       const loc = await Location.getCurrentPositionAsync({});
       setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
       setSource("gps");
     } catch {
-      // no GPS in this browser — geocode remains the only path
+      setLocError("Couldn't get a location fix in this browser.");
     } finally {
       setBusy(false);
     }
@@ -70,6 +76,7 @@ export default function MapPinPicker({ visible, initial, addressText, onConfirm,
           ) : (
             <Text style={styles.coordsText}>No location yet — try the button below.</Text>
           )}
+          {locError && <Text style={styles.locError}>{locError}</Text>}
           <TouchableOpacity style={styles.gpsBtn} onPress={useCurrentLocation} disabled={busy}>
             <MaterialCommunityIcons name="crosshairs-gps" size={18} color={COLORS.forestGreen} />
             <Text style={styles.gpsBtnText}>Use current location</Text>
@@ -94,6 +101,7 @@ const styles = StyleSheet.create({
   note: { ...TYPE.bodySm, color: COLORS.textLight },
   coordsRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm },
   coordsText: { ...TYPE.caption, color: COLORS.textMuted },
+  locError: { ...TYPE.caption, color: COLORS.error },
   gpsBtn: {
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: SPACING.sm,
     borderWidth: 1.5, borderColor: COLORS.forestGreen, borderRadius: RADIUS.full,
