@@ -143,11 +143,33 @@ async def get_worklist(current_user: dict = Depends(get_current_user)):
         "status": {"$in": ["assigned", "accepted", "started"]},
     }).sort("created_at", -1)
     trips = await cursor.to_list(length=50)
+    # Catalog lookup so pickup items resolve their id + image even on orders
+    # whose lines predate item_id being stored (match by service+item name).
+    catalog = {}
+    async for svc in db.services.find({}):
+        for it in svc.get("items", []):
+            entry = {"item_id": str(it.get("_id", "")), "image_url": it.get("image_url")}
+            catalog[str(it.get("_id", ""))] = entry
+            catalog[(svc.get("name", "").lower(), it.get("name", "").lower())] = entry
     result = []
     for t in trips:
         order = await db.orders.find_one({"_id": ObjectId(t["order_id"])})
         customer = await db.users.find_one({"_id": ObjectId(order["user_id"])}) if order else None
+        items = []
+        for idx, i in enumerate((order or {}).get("items", [])):
+            cat = catalog.get(i.get("item_id")) or catalog.get(
+                (i.get("service_name", "").lower(), i.get("item_name", "").lower())) or {}
+            items.append({
+                "line_id": i.get("line_id", str(idx)),
+                "item_id": i.get("item_id") or cat.get("item_id"),
+                "service_name": i.get("service_name"), "item_name": i.get("item_name"),
+                "price": i.get("price"), "quantity": i.get("quantity"),
+                "subtotal": i.get("subtotal"), "unit": i.get("unit", "piece"),
+                "image_url": cat.get("image_url"),
+                "tentative_qty": i.get("tentative_qty"), "actual_qty": i.get("actual_qty"),
+            })
         result.append({
+            "items": items,
             "id": str(t["_id"]), "order_id": t["order_id"],
             "order_number": order["order_number"] if order else "N/A",
             "trip_type": t["trip_type"], "status": t["status"],

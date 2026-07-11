@@ -10,6 +10,7 @@ import * as ImagePicker from "expo-image-picker";
 import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
 import { useTripStore } from "../../../stores/tripStore";
 import RescheduleModal from "../../../components/RescheduleModal";
+import ItemImageUploader from "../../../components/ItemImageUploader";
 
 // Step indices per trip type
 const STEPS = {
@@ -302,6 +303,31 @@ export default function ActiveTaskScreen() {
           </View>
         )}
 
+        {/* Order Items — rider verifies items at pickup; tap a photo slot to
+            set the item's catalog image (one per item, replaces on re-upload) */}
+        {isPickup && currentStep >= 1 && trip.items?.length > 0 && (
+          <View style={styles.itemsCard}>
+            <Text style={styles.itemsTitle}>Order Items</Text>
+            {trip.items.map((it, idx) => (
+              <View key={it.line_id ?? idx} style={styles.itemRow}>
+                {it.item_id ? (
+                  <ItemImageUploader itemId={it.item_id} imageUrl={it.image_url} size={48} />
+                ) : (
+                  <View style={styles.itemNoImg}>
+                    <Ionicons name="shirt-outline" size={20} color={COLORS.textMuted} />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemName}>{it.item_name}</Text>
+                  <Text style={styles.itemMeta}>
+                    {it.quantity}{it.unit === "kg" ? " kg" : ""} · ₹{it.subtotal}
+                  </Text>
+                </View>
+              </View>
+            ))}
+          </View>
+        )}
+
         {/* ── STEP 0: Start Trip ── */}
         {currentStep === 0 && (
           <View style={styles.actionCard}>
@@ -552,6 +578,19 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.success, width: 40, height: 40,
     borderRadius: 20, justifyContent: "center", alignItems: "center",
   },
+
+  itemsCard: {
+    backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, padding: SPACING.lg,
+    borderRadius: RADIUS.lg, borderWidth: 1, borderColor: COLORS.border, marginBottom: SPACING.md,
+  },
+  itemsTitle: { fontSize: 14, fontWeight: "800", color: COLORS.black, marginBottom: SPACING.sm },
+  itemRow: { flexDirection: "row", alignItems: "center", gap: SPACING.md, paddingVertical: SPACING.sm },
+  itemNoImg: {
+    width: 48, height: 48, borderRadius: RADIUS.md, backgroundColor: COLORS.background,
+    borderWidth: 1, borderColor: COLORS.border, justifyContent: "center", alignItems: "center",
+  },
+  itemName: { fontSize: 14, fontWeight: "600", color: COLORS.black },
+  itemMeta: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
 
   actionCard: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, padding: SPACING.xl,
