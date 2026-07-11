@@ -3,7 +3,9 @@ import { useEffect, useMemo, useState } from "react";
 import { X, Plus, Trash2, Receipt } from "lucide-react";
 import api from "@/lib/api";
 
-type Line = { service_name: string; item_name: string; price: number; quantity: number; unit?: string };
+// Extra weight-flow fields (line_id/tentative_qty/actual_qty/weighed_*) ride
+// along untyped so an admin bill edit round-trips them instead of wiping them.
+type Line = { service_name: string; item_name: string; price: number; quantity: number; unit?: string } & Record<string, unknown>;
 type Coupon = { id: string; code: string; type: "percent" | "flat"; value: number; min_order: number; max_discount: number | null; usage_limit: number | null; used_count: number; valid_to: string | null; active: boolean };
 
 type Props = {
@@ -46,7 +48,7 @@ export default function EditBillModal({ orderId, initialItems, initialDiscount, 
   const total = Math.max(0, Math.round(subtotal - discount));
 
   const save = async () => {
-    const items = lines.filter((l) => l.item_name.trim() && Number(l.quantity) > 0).map((l) => ({ service_name: l.service_name, item_name: l.item_name, price: Number(l.price) || 0, quantity: Number(l.quantity) || 0, unit: l.unit || "piece" }));
+    const items = lines.filter((l) => l.item_name.trim() && Number(l.quantity) > 0).map((l) => ({ ...l, service_name: l.service_name, item_name: l.item_name, price: Number(l.price) || 0, quantity: Number(l.quantity) || 0, unit: l.unit || "piece" }));
     if (items.length === 0) { setError("A bill needs at least one item"); return; }
     setSaving(true); setError("");
     try {

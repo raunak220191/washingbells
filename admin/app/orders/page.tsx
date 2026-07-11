@@ -32,7 +32,15 @@ type PhotoRef = { url: string; upload_id?: string | null; size?: number; uploade
 type OrderDetail = {
   id: string; order_number: string; status: string;
   payment_method: string; payment_status: string;
-  items: { service_name: string; item_name: string; price: number; quantity: number; subtotal: number }[];
+  items: { service_name: string; item_name: string; price: number; quantity: number; subtotal: number;
+    unit?: string; line_id?: string; item_id?: string; tentative_qty?: number | null;
+    actual_qty?: number | null; weighed_by?: { role?: string; name?: string | null } | null;
+    weighed_at?: string | null }[];
+  bill_revisions?: { at: string; by?: string; by_role?: string; kind?: string; item_name?: string;
+    before?: { quantity?: number; subtotal?: number; total_amount?: number };
+    after?: { quantity?: number; subtotal?: number; total_amount?: number };
+    invoice_was_issued?: boolean; note?: string | null }[];
+  invoice_stale?: boolean;
   subtotal: number; delivery_fee: number; discount: number; wallet_applied: number;
   total_amount: number; coupon_code: string | null;
   address: { full_address: string; city: string } | null;
@@ -451,8 +459,19 @@ export default function OrdersPage() {
                         <div>
                           <div className="text-xs text-gray-400 uppercase">{item.service_name}</div>
                           <div className="text-gray-800">
-                            {item.item_name} × {item.quantity}{(item as any).unit === "kg" ? " kg" : ""}
+                            {item.item_name} × {item.quantity}{item.unit === "kg" ? " kg" : ""}
                           </div>
+                          {item.unit === "kg" && (
+                            item.actual_qty != null ? (
+                              <div className="text-[11px] text-gray-500 mt-0.5">
+                                est ~{item.tentative_qty ?? "—"} kg → <span className="font-semibold text-gray-700">{item.actual_qty} kg</span>
+                                {item.weighed_by && ` · weighed by ${item.weighed_by.name || item.weighed_by.role}`}
+                                {item.weighed_at && ` · ${formatDateTime(item.weighed_at)}`}
+                              </div>
+                            ) : (
+                              <div className="text-[11px] text-amber-600 mt-0.5">estimate — not weighed yet</div>
+                            )
+                          )}
                         </div>
                         <div className="font-semibold text-gray-700">₹{item.subtotal?.toFixed(0)}</div>
                       </div>
@@ -485,6 +504,38 @@ export default function OrdersPage() {
                       <Printer size={13} /> GST Invoice
                     </button>
                   </div>
+                  {detail.invoice_stale && (
+                    <div className="mt-2 text-[11px] text-red-600 font-semibold">
+                      ⚠ Bill changed after the GST invoice was issued — issue a revised invoice / credit note.
+                    </div>
+                  )}
+                  {(detail.bill_revisions?.length || 0) > 0 && (
+                    <div className="mt-3 border-t border-gray-200 pt-2">
+                      <div className="text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5 flex items-center gap-1.5">
+                        <History size={11} /> Bill Audit ({detail.bill_revisions!.length})
+                      </div>
+                      <div className="space-y-1.5">
+                        {detail.bill_revisions!.map((rev, i) => (
+                          <div key={i} className="text-[11px] text-gray-600 bg-white rounded-lg border border-gray-100 px-2.5 py-1.5">
+                            <div className="flex justify-between gap-2">
+                              <span className="font-semibold">
+                                {rev.kind === "weight_update"
+                                  ? `Weight: ${rev.item_name} ${rev.before?.quantity ?? "?"} → ${rev.after?.quantity ?? "?"} kg`
+                                  : "Bill edited (admin)"}
+                              </span>
+                              <span className="text-gray-400 whitespace-nowrap">{formatDateTime(rev.at)}</span>
+                            </div>
+                            <div className="text-gray-500">
+                              total ₹{rev.before?.total_amount?.toFixed?.(0) ?? rev.before?.total_amount} → ₹{rev.after?.total_amount?.toFixed?.(0) ?? rev.after?.total_amount}
+                              {rev.by_role && ` · by ${rev.by_role}`}
+                              {rev.invoice_was_issued && <span className="text-red-500"> · after invoice</span>}
+                            </div>
+                            {rev.note && <div className="text-gray-400 italic">{rev.note}</div>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Garment Tags */}
