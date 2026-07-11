@@ -31,6 +31,15 @@ export const useOrderStore = create((set, get) => ({
     return res.data;
   },
 
+  // Weight-based lines: confirm/correct a kg line on the store scale
+  // (upgrade_last TASK 2.4) — same endpoint + audit trail as the rider flow.
+  updateLineWeight: async (orderId, lineId, actualQty) => {
+    const res = await api.patch(`/orders/${orderId}/items/${lineId}/weight`,
+      { actual_qty: actualQty });
+    await get().fetchOrderDetail(orderId);
+    return res.data;
+  },
+
   receiveClothes: async (orderId, otp) => {
     const res = await api.post(`/store-ops/orders/${orderId}/receive`, { otp });
     await get().fetchOrderDetail(orderId);

@@ -30,6 +30,65 @@ const ACTIONS = {
   rejected: [],
 };
 
+// Backend allows scale confirmation/correction in these statuses (TASK 2.4)
+const WEIGHABLE_STATUSES = ["rider_assigned_pickup", "picked_up", "at_store", "processing"];
+
+// Inline scale-entry for one kg line — store verifies or corrects the rider's
+// weighing; every change goes through the same PATCH + audit trail.
+function StoreWeighRow({ orderId, item }) {
+  const { updateLineWeight } = useOrderStore();
+  const [val, setVal] = useState(
+    String(item.actual_qty ?? item.tentative_qty ?? item.quantity ?? "")
+  );
+  const [busy, setBusy] = useState(false);
+
+  const confirm = async () => {
+    if (!/^\d{1,3}(\.\d)?$/.test(val.trim())) {
+      Alert.alert("Invalid weight", "Use a number with at most 1 decimal place, e.g. 3.6");
+      return;
+    }
+    const q = parseFloat(val);
+    if (!(q > 0 && q <= 100)) {
+      Alert.alert("Invalid weight", "Weight must be between 0 and 100 kg.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateLineWeight(orderId, item.line_id, q);
+    } catch (e) {
+      Alert.alert("Error", e?.response?.data?.detail || "Could not save the weight. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.weighRow}>
+      <TextInput
+        style={styles.weighInput}
+        keyboardType="decimal-pad"
+        value={val}
+        onChangeText={setVal}
+        placeholder="0.0"
+        placeholderTextColor={COLORS.textMuted}
+        accessibilityLabel={`Weighed quantity for ${item.item_name}`}
+      />
+      <Text style={styles.weighUnit}>kg</Text>
+      <TouchableOpacity
+        style={[styles.weighBtn, busy && { opacity: 0.5 }]}
+        onPress={confirm}
+        disabled={busy}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={COLORS.white} />
+        ) : (
+          <Text style={styles.weighBtnText}>{item.actual_qty != null ? "Correct" : "Confirm"}</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 const HOUR_OPTIONS = [
   { label: "+1 hr", hours: 1 },
   { label: "+2 hrs", hours: 2 },
@@ -354,7 +413,16 @@ export default function OrderDetailScreen() {
             <View key={i} style={[styles.itemRow, i === (order.items.length - 1) && { borderBottomWidth: 0 }]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.itemService}>{item.service_name}</Text>
-                <Text style={styles.itemName}>{item.item_name + " x" + item.quantity}</Text>
+                <Text style={styles.itemName}>
+                  {item.unit === "kg"
+                    ? item.item_name + (item.actual_qty != null
+                        ? ` · ${item.actual_qty} kg (weighed${item.weighed_by?.role ? " by " + (item.weighed_by.role === "store_owner" ? "store" : item.weighed_by.role) : ""})`
+                        : ` · ~${item.tentative_qty ?? item.quantity} kg (customer estimate)`)
+                    : item.item_name + " x" + item.quantity}
+                </Text>
+                {item.unit === "kg" && item.line_id && WEIGHABLE_STATUSES.includes(order.status) && (
+                  <StoreWeighRow orderId={order.id} item={item} />
+                )}
               </View>
               <Text style={styles.itemPrice}>{"Rs " + (item.subtotal ? item.subtotal.toFixed(0) : "0")}</Text>
             </View>
@@ -728,6 +796,19 @@ const styles = StyleSheet.create({
   itemService: { fontSize: 10, color: COLORS.textMuted, fontWeight: "700", textTransform: "uppercase" },
   itemName: { fontSize: 14, color: COLORS.text, fontWeight: "500" },
   itemPrice: { fontSize: 14, fontWeight: "700", color: COLORS.black },
+  weighRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, marginTop: SPACING.sm },
+  weighInput: {
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md, paddingVertical: 6, minWidth: 72,
+    fontSize: 15, fontWeight: "600", color: COLORS.black, backgroundColor: COLORS.white,
+    textAlign: "center",
+  },
+  weighUnit: { fontSize: 13, color: COLORS.textMuted, fontWeight: "600" },
+  weighBtn: {
+    backgroundColor: COLORS.forestGreen, borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg, paddingVertical: 8, minWidth: 84, alignItems: "center",
+  },
+  weighBtnText: { color: COLORS.white, fontSize: 13, fontWeight: "700" },
   noteBox: { flexDirection: "row", gap: SPACING.sm, backgroundColor: "#E3F2FD", padding: SPACING.sm, borderRadius: RADIUS.sm, marginTop: SPACING.md },
   noteText: { flex: 1, fontSize: 12, color: "#1565C0", lineHeight: 18 },
   priceRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: SPACING.xs },
