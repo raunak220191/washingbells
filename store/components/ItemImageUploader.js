@@ -3,7 +3,7 @@
 // this repo (each app vendors its components — see RescheduleModal/HtmlText).
 // Keep both copies in sync.
 import React, { useState, useRef } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, Alert, ActivityIndicator, Platform, ActionSheetIOS } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
@@ -102,6 +102,27 @@ export default function ItemImageUploader({ itemId, imageUrl, size = 56, onChang
         { text: "Cancel", style: "cancel", onPress: () => { setFailed(false); setPreview(null); } },
         { text: "Retry", onPress: () => upload(lastAssetRef.current) },
       ]);
+      return;
+    }
+    // Native action sheet on iOS (HIG); Alert-based sheet on Android.
+    if (Platform.OS === "ios") {
+      const options = ["Take Photo", "Choose from Gallery"];
+      if (displayUri) options.push("Remove Photo");
+      options.push("Cancel");
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          title: "Item photo",
+          message: "One photo per item — uploading again replaces it.",
+          options,
+          destructiveButtonIndex: displayUri ? 2 : undefined,
+          cancelButtonIndex: options.length - 1,
+        },
+        (i) => {
+          if (i === 0) pick(true);
+          else if (i === 1) pick(false);
+          else if (displayUri && i === 2) removePhoto();
+        }
+      );
       return;
     }
     const buttons = [
