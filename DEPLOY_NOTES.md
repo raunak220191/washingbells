@@ -176,6 +176,20 @@ built. All three apps will be REBUILT for both platforms after the iOS-parity co
 version bump (1.2.1) so every shipped artifact contains identical JS. vc13 stays on the
 track (superseded by the 1.2.1 build; same track, no promotion — clock unaffected).
 
+## iOS cycle — TASK 5 cross-platform regression results (2026-07-11)
+
+| Check | Result |
+|---|---|
+| Backend suite | **65 passed** (adds the HEIC fixture test: 415 honest / 400 spoofed, never 500) |
+| localeCompare pin | `node --test scripts/localeSort.test.mjs` → 2/2 pass (fixture asserts case-insensitive base-sensitivity order) |
+| JS parse checks | All files changed in IOS-1..4 pass babel JSX parse |
+| Admin | Untouched this cycle (last run: tsc clean, eslint 152 ≤ 153 baseline) |
+| **Android emulator smoke** (Pixel 7 API 35, Expo Go, adb-driven) | Home ✓ · Dry Clean screen: SearchBar above intact chips, item thumbnails, A→Z within category ✓ · search "sh" → flat cross-category results with labels, clear × ✓ · My Addresses: no false "pin" banner (seeded address has coords) ✓ · New Address form: required LOCATION PIN card ✓ · MapPinPicker modal: fixed center pin, Use-current-location, live coords, Confirm ✓ |
+| Android map tiles | **Blank in Expo Go** — Expo Go Android ships no Google Maps key; production AAB injects ours via app.config.js (verified in resolved config). Tile render + pan gesture → tester checklist on the production build. |
+| **iOS simulator smoke** (iPhone 14, Expo Go 54.0.7) | App boots and renders the login screen correctly — the full JS graph incl. all iOS-parity changes (react-native-maps, ActionSheetIOS, KAV) loads on iOS Hermes with no redbox. |
+| iOS interactive smoke | **Not automatable on this machine**: maestro's iOS driver crashes on this Xcode's `devicectl` JSON; `osascript` input injection blocked by macOS Accessibility permission (manual grant required). ActionSheetIOS sheet, weigh-entry keyboard, Apple Maps pin → delegated to TestFlight internal testers (priority list below); compile risk covered by EAS iOS builds. |
+| OTP regression | test_c1 dev flows green; live Twilio send → first tester login on the new builds. |
+
 ## TASK 5.4 — Post-deploy
 
 - Notify tester (Hardik): the 4 changes above; ask him to focus on the **kg weight
