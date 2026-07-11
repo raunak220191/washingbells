@@ -17,6 +17,7 @@ import Button from "../../../../components/common/Button";
 import Screen from "../../../../components/common/Screen";
 import Header from "../../../../components/common/Header";
 import BottomBar from "../../../../components/common/BottomBar";
+import ItemThumb from "../../../../components/common/ItemThumb";
 import api from "../../../../lib/api";
 import { matches } from "../../../../constants/categories";
 import { categoryLabel } from "../../../../constants/categories";
@@ -51,6 +52,7 @@ export default function CategoryScreen() {
               item_id: item.id,
               name: item.name,
               price: item.price,
+              image_url: item.image_url,
             });
           }
         }
@@ -136,6 +138,7 @@ export default function CategoryScreen() {
             const qty = getQty(item.key);
             return (
               <View style={styles.itemCard}>
+                <ItemThumb imageUrl={item.image_url} style={styles.itemThumb} />
                 <View style={styles.itemInfo}>
                   <Text style={styles.itemName}>{item.name}</Text>
                   <Text style={styles.itemService}>{item.service_name}</Text>
@@ -194,6 +197,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: COLORS.borderLight,
   },
+  itemThumb: { marginRight: SPACING.md },
   itemInfo: { flex: 1 },
   itemName: { ...TYPE.body, fontWeight: "600", color: COLORS.text },
   itemService: { ...TYPE.caption, color: COLORS.textMuted, marginTop: 1 },

@@ -5,6 +5,9 @@ import api from "@/lib/api";
 import { CATEGORIES, categoryStyle } from "@/lib/categories";
 import { Plus, Pencil, Trash2, ChevronDown, ChevronRight, Save, X, RefreshCw } from "lucide-react";
 
+const BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const API_ORIGIN = BASE_URL.replace(/\/api\/v1\/?$/, "");
+
 const ICONS = ["shirt-outline","water-outline","layers-outline","footsteps-outline","thermometer-outline","diamond-outline","tv-outline","basket-outline","shirt","car-outline","flower-outline","sparkles-outline"];
 const PRICING_UNITS = ["piece","pair","kg","sqft","set"];
 const SERVICE_TYPES = ["pickup_drop","at_home"];
@@ -37,6 +40,9 @@ export default function ServicesPage() {
 
   // Edit item
   const [editItem, setEditItem] = useState<{ svcId: string; itemId: string; name: string; price: string; category: string } | null>(null);
+
+  // Item image preview (click thumbnail to enlarge) — display-only
+  const [previewImg, setPreviewImg] = useState<{ url: string; name: string } | null>(null);
 
   const load = async () => {
     setLoading(true);
@@ -252,6 +258,7 @@ export default function ServicesPage() {
                   <table className="w-full text-sm">
                     <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
                       <tr>
+                        <th className="px-5 py-2.5 text-left font-semibold">Img</th>
                         <th className="px-5 py-2.5 text-left font-semibold">Item Name</th>
                         <th className="px-5 py-2.5 text-left font-semibold">Category</th>
                         <th className="px-5 py-2.5 text-left font-semibold">Price (₹)</th>
@@ -263,6 +270,7 @@ export default function ServicesPage() {
                         <tr key={item.id} className="hover:bg-gray-50">
                           {editItem && editItem.svcId === svc.id && editItem.itemId === item.id ? (
                             <>
+                              <td className="px-5 py-2" />
                               <td className="px-5 py-2">
                                 <input value={editItem.name} onChange={e => setEditItem({...editItem, name: e.target.value})}
                                   className="border border-amber-300 rounded px-2 py-1 text-sm w-full focus:outline-none focus:border-amber-500" />
@@ -290,6 +298,17 @@ export default function ServicesPage() {
                             </>
                           ) : (
                             <>
+                              <td className="px-5 py-2.5">
+                                {item.image_url ? (
+                                  <button onClick={() => setPreviewImg({ url: `${API_ORIGIN}${item.image_url}`, name: item.name })} className="block">
+                                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                                    <img src={`${API_ORIGIN}${item.image_url}`} alt={item.name}
+                                      className="w-8 h-8 rounded object-cover border border-gray-200 hover:ring-2 hover:ring-amber-400 transition-shadow" />
+                                  </button>
+                                ) : (
+                                  <div className="w-8 h-8 rounded bg-gray-100 border border-gray-200 flex items-center justify-center text-gray-300 text-[9px]">—</div>
+                                )}
+                              </td>
                               <td className="px-5 py-2.5 text-gray-800">{item.name}</td>
                               <td className="px-5 py-2.5">
                                 <span className={`text-xs px-2 py-0.5 rounded-full capitalize ${categoryStyle(item.category || "unisex")}`}>
@@ -316,6 +335,7 @@ export default function ServicesPage() {
 
                       {/* Add new item row */}
                       <tr className="bg-green-50">
+                        <td className="px-5 py-2" />
                         <td className="px-5 py-2">
                           <input
                             value={newItem[svc.id]?.name || ""}
@@ -358,6 +378,20 @@ export default function ServicesPage() {
               )}
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Item image lightbox */}
+      {previewImg && (
+        <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center" onClick={() => setPreviewImg(null)}>
+          <div className="text-center">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={previewImg.url} alt={previewImg.name} className="max-w-[80vw] max-h-[80vh] object-contain rounded-lg" />
+            <p className="text-white text-sm mt-3">{previewImg.name}</p>
+          </div>
+          <button onClick={() => setPreviewImg(null)} className="absolute top-4 right-4 text-white">
+            <X size={28} />
+          </button>
         </div>
       )}
     </PageLayout>

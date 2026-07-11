@@ -18,6 +18,7 @@ import Screen from "../../../../components/common/Screen";
 import Header from "../../../../components/common/Header";
 import Chip, { ChipRow } from "../../../../components/common/Chip";
 import BottomBar from "../../../../components/common/BottomBar";
+import ItemThumb from "../../../../components/common/ItemThumb";
 import api from "../../../../lib/api";
 
 export default function ServiceDetailScreen() {
@@ -135,6 +136,7 @@ export default function ServiceDetailScreen() {
           const qty = getQty(item.id);
           return (
             <View style={styles.itemCard}>
+              <ItemThumb imageUrl={item.image_url} style={styles.itemThumb} />
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
                 <Text style={styles.itemPrice}>
@@ -205,6 +207,9 @@ const styles = StyleSheet.create({
     marginBottom: SPACING.sm,
     borderWidth: 1,
     borderColor: COLORS.borderLight,
+  },
+  itemThumb: {
+    marginRight: SPACING.md,
   },
   itemInfo: {
     flex: 1,
