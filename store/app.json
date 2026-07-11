@@ -21,7 +21,9 @@
         "UIBackgroundModes": [
           "remote-notification"
         ],
-        "NSLocationWhenInUseUsageDescription": "WashingBells Store needs your location to pin your store on the map."
+        "NSLocationWhenInUseUsageDescription": "WashingBells Store needs your location to pin your store on the map.",
+        "NSCameraUsageDescription": "WashingBells uses the camera to photograph laundry items.",
+        "NSPhotoLibraryUsageDescription": "WashingBells needs photo library access to upload item images."
       }
     },
     "android": {

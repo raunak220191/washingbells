@@ -25,7 +25,9 @@
         ],
         "NSLocationWhenInUseUsageDescription": "WashingBells Rider needs your location to assign nearby trips.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "WashingBells Rider tracks your location while you are online so customers and store can see your live position.",
-        "NSLocationAlwaysUsageDescription": "WashingBells Rider tracks your location while you are online so customers and store can see your live position."
+        "NSLocationAlwaysUsageDescription": "WashingBells Rider tracks your location while you are online so customers and store can see your live position.",
+        "NSCameraUsageDescription": "WashingBells uses the camera to photograph laundry items.",
+        "NSPhotoLibraryUsageDescription": "WashingBells needs photo library access to upload item images."
       }
     },
     "android": {
