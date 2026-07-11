@@ -73,6 +73,8 @@ class AddressCreate(BaseModel):
     state: str = "Punjab"
     pincode: str
     is_default: bool = False
+    # TASK 3: how the pin was set — "map_pin" | "geocode" | "gps"
+    location_source: Optional[str] = None
 
 
 class AddressUpdate(BaseModel):
@@ -85,6 +87,7 @@ class AddressUpdate(BaseModel):
     state: Optional[str] = None
     pincode: Optional[str] = None
     is_default: Optional[bool] = None
+    location_source: Optional[str] = None
 
 
 class AddressResponse(BaseModel):
@@ -99,6 +102,7 @@ class AddressResponse(BaseModel):
     state: str
     pincode: str
     is_default: bool
+    location_source: Optional[str] = None
     created_at: datetime
 
 

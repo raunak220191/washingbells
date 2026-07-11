@@ -25,6 +25,7 @@ def _format_address(addr: dict) -> AddressResponse:
         state=addr["state"],
         pincode=addr["pincode"],
         is_default=addr.get("is_default", False),
+        location_source=addr.get("location_source"),
         created_at=addr["created_at"],
     )
 
@@ -71,8 +72,18 @@ async def create_address(
         if coords:
             doc["latitude"], doc["longitude"] = coords
             doc["geocoded"] = True
+            doc["location_source"] = doc.get("location_source") or "geocode"
         else:
-            doc["latitude"], doc["longitude"] = None, None
+            # TASK 3.2: NEW addresses require coordinates — without them the
+            # geospatial store matching can never find a store. Old documents
+            # stay nullable; the app prompts to pin them on next use.
+            raise HTTPException(
+                status_code=400,
+                detail="We couldn't locate this address on the map. "
+                       "Please pin the location to save it.")
+    # GeoJSON Point ([lng, lat] — same convention as stores) for geo queries.
+    doc["location"] = {"type": "Point",
+                       "coordinates": [doc["longitude"], doc["latitude"]]}
     result = await db.addresses.insert_one(doc)
     created = await db.addresses.find_one({"_id": result.inserted_id})
     return _format_address(created)
@@ -108,6 +119,13 @@ async def update_address(
         if coords:
             update_data["latitude"], update_data["longitude"] = coords
             update_data["geocoded"] = True
+
+    # Keep the GeoJSON point in sync whenever coordinates change (TASK 3.2).
+    if update_data.get("latitude") is not None and update_data.get("longitude") is not None:
+        update_data["location"] = {
+            "type": "Point",
+            "coordinates": [update_data["longitude"], update_data["latitude"]],
+        }
 
     if update_data.get("is_default"):
         await db.addresses.update_many(

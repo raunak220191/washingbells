@@ -6,7 +6,7 @@ from app.routers import (
     auth, users, addresses, services, cart, orders, payments,
     banners, testimonials, stores, referrals, coupons, wallet,
     delivery, store_ops, admin, upload, terms, notifications, email_admin,
-    email_public, inbox, admin_db, items,
+    email_public, inbox, admin_db, items, geo,
 )
 
 
@@ -62,6 +62,11 @@ async def lifespan(app: FastAPI):
         await db.stores.create_index([("location", "2dsphere")])
         from app.services.geo_service import sync_missing_store_locations
         await sync_missing_store_locations(db)
+        # TASK 3.2: addresses now carry a GeoJSON point too (new docs); the
+        # geocode-proxy rate-limit window expires after 10 minutes.
+        await db.addresses.create_index([("location", "2dsphere")])
+        await db.geo_requests.create_index("created_at", expireAfterSeconds=60 * 10)
+        await db.geo_requests.create_index([("user_id", 1), ("created_at", -1)])
         print("[startup] DB indexes ensured")
     except Exception as e:
         print(f"[startup] Index ensure skipped: {e}")
@@ -121,6 +126,7 @@ app.include_router(email_public.router, prefix="/api/v1")
 app.include_router(inbox.router, prefix="/api/v1")
 app.include_router(admin_db.router, prefix="/api/v1")
 app.include_router(items.router, prefix="/api/v1")
+app.include_router(geo.router, prefix="/api/v1")
 
 
 @app.get("/")

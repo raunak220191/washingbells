@@ -1,12 +1,11 @@
-"""B2 — customers are never asked for coordinates.
+"""B2 — customers are never asked to TYPE coordinates.
 
-The app captures GPS or geocodes on-device; the server geocodes typed
-addresses when GOOGLE_MAPS_API_KEY is set. Locally (no key) the address must
-still save cleanly with null coordinates — never crash, never invent a
-wrong-city default (the old client pinned no-GPS addresses to Ludhiana).
+The app captures GPS / a map pin, or the server geocodes the typed address
+when GOOGLE_MAPS_API_KEY is set. Since upgrade_last TASK 3.2, a NEW address
+that still has no coordinates after the geocode attempt is REJECTED with a
+clear 400 (unlocatable addresses made the geospatial store matching silently
+return nothing). Old documents stay nullable; the app prompts to pin them.
 """
-
-from conftest import login
 
 
 def _addr_body(**over):
@@ -20,15 +19,18 @@ def _addr_body(**over):
     }
 
 
-def test_address_saves_without_coordinates(customer):
+def test_address_without_coordinates_is_rejected_clearly(customer):
+    # Locally (no GOOGLE_MAPS_API_KEY) the server geocode returns None, so a
+    # coordinate-less address must fail loudly — not save with null coords and
+    # later match zero stores in silence. (With a key configured the server
+    # would geocode it and this saves fine.)
     r = customer.post("/addresses", json=_addr_body())
-    assert r.status_code == 201, r.text[:300]
-    created = r.json()
-    # No key locally → server geocode is skipped; coords must be null, not a
-    # fabricated default. With a key configured they'd be real values.
-    assert created["latitude"] is None or isinstance(created["latitude"], float)
-    assert created["latitude"] != 30.9, "must not fabricate the old Ludhiana default"
-    customer.client.delete(f"/addresses/{created['id']}")
+    assert r.status_code in (201, 400), r.text[:300]
+    if r.status_code == 400:
+        assert "pin" in r.json()["detail"].lower()
+    else:  # geocode key present in this environment → coords must be real
+        assert isinstance(r.json()["latitude"], float)
+        customer.client.delete(f"/addresses/{r.json()['id']}")
 
 
 def test_address_with_gps_passthrough(customer):
@@ -41,8 +43,10 @@ def test_address_with_gps_passthrough(customer):
 
 
 def test_zero_coords_treated_as_missing(customer):
-    # Old builds sent 0/0 when GPS was denied — that's the sentinel, not a place
+    # Old builds sent 0/0 when GPS was denied — that's the sentinel, not a
+    # place. Same contract as no-coords: geocode or reject, never save 0/0.
     r = customer.post("/addresses", json=_addr_body(latitude=0, longitude=0))
-    assert r.status_code == 201, r.text[:300]
-    assert r.json()["latitude"] != 0
-    customer.client.delete(f"/addresses/{r.json()['id']}")
+    assert r.status_code in (201, 400), r.text[:300]
+    if r.status_code == 201:
+        assert r.json()["latitude"] != 0
+        customer.client.delete(f"/addresses/{r.json()['id']}")
