@@ -66,6 +66,26 @@ def test_unknown_item_404(store_owner):
     assert _upload(store_owner, "item_does_not_exist").status_code == 404
 
 
+def _heic_bytes() -> bytes:
+    # Minimal ISO-BMFF 'ftypheic' header — Pillow without pillow-heif cannot
+    # decode HEIC, which is exactly what this asserts.
+    return b"\x00\x00\x00\x18ftypheic\x00\x00\x00\x00heicmif1" + b"\x00" * 64
+
+
+def test_heic_from_iphone_rejected_cleanly(store_owner, target_item):
+    """iOS parity (upgrade_last_ios TASK 1): HEIC never reaches storage.
+
+    The apps re-encode to JPEG client-side (expo-image-manipulator
+    SaveFormat.JPEG), so the backend only needs to REJECT heic cleanly —
+    415 on an honest content type, 400 (not 500) if spoofed as jpeg."""
+    r = _upload(store_owner, target_item["id"], content=_heic_bytes(),
+                content_type="image/heic", filename="a.heic")
+    assert r.status_code == 415
+    r = _upload(store_owner, target_item["id"], content=_heic_bytes(),
+                content_type="image/jpeg", filename="a.jpg")
+    assert r.status_code == 400
+
+
 def test_store_upload_processed_and_visible(store_owner, customer, target_item):
     r = _upload(store_owner, target_item["id"])
     assert r.status_code == 200, r.text
