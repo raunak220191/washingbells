@@ -204,6 +204,51 @@ track (superseded by the 1.2.1 build; same track, no promotion — clock unaffec
   The migration is additive-only (new fields/indexes) — old code ignores them, so no
   down-migration is needed.
 
+## FINAL RELEASE RECORD — v1.2.1 dual-platform (2026-07-11, verified live)
+
+Release tag: **`v1.2.1-upgrade-last`** (pushed). Backend: Cloud Run `washingbells-api-00012-j97`
+(health OK, prod geocode verified, Atlas migration ran: 8 addr + 9 orders backfilled).
+
+**All 6 mobile artifacts shipped and verified via ASC + Play Developer APIs:**
+
+| App | iOS — TestFlight (ASC) | Android — Play internal track |
+|---|---|---|
+| Customer | build **16** · VALID · [IPA](https://expo.dev/artifacts/eas/-C2cKPxQSbeAP7B6RsP0_aJRYZRlSzVVr2iHfoHQqgc.ipa) | v1.2.1 **vc 15** · status=completed |
+| Store | build **11** · VALID · [IPA](https://expo.dev/artifacts/eas/1RHpIwF_nPfB4yTsTNennhUPSGbhsBAlTc6yOeK4qLc.ipa) | v1.2.1 **vc 16** · status=completed |
+| Rider | build **10** · VALID · [IPA](https://expo.dev/artifacts/eas/ynXzInJctTblRqL8alJ2TXhOHebEFrOA3WciacN2V3k.ipa) | v1.2.1 **vc 12** · status=completed |
+
+Each iOS build number is strictly greater than the prior TF build (was 15/9/9) ✓. Each
+lands in the **existing internal TestFlight group** (auto-distribution on — testers notified
+by Apple). Android submits went to the **same internal track** (no new tracks, no promotion).
+
+**Build infrastructure notes (this cycle):**
+- **Android EAS cloud quota was exhausted** (free plan, resets Aug 1). Worked around by
+  building all 3 Android AABs **locally** (`eas build --local`, JDK 17, `GOOGLE_MAPS_ANDROID_API_KEY`
+  exported into build env). Same remote keystore/credentials fetched from EAS → Play accepts
+  them. A new Expo account was explicitly NOT created (would mean a new keystore → Play rejects
+  the update as a different app). iOS builds used EAS cloud normally.
+- **`.easignore` swap is mandatory for store/rider builds** (root `.easignore` scopes customer
+  and strips `store/`+`rider/`). Missing it caused early store failures ("package.json does not
+  exist in build/store"). Correct flow per app dir: `cp .easignore-<app> .easignore` →
+  `(cd <app> && EAS_NO_VCS=1 eas build …)` → `git checkout .easignore`. `.easignore` verified
+  clean after every build.
+- **store/rider iOS marketing version cosmetic quirk**: with `appVersionSource: remote`, EAS's
+  server-side version string for store/rider was stale ("1.0.0"/"1.1.0") so those IPAs carry an
+  older `CFBundleShortVersionString` even though buildNumber (11/10) is correct and strictly
+  greater. This does NOT block TestFlight (build number is what ASC gates on). Customer was
+  already correct (1.2.1). **Open cosmetic cleanup**: run `eas build:version:set` interactively
+  per app to set the remote version string to 1.2.1 before the next store/rider iOS build.
+
+**Post-deploy tester note for Hardik** — Android on the same internal track (auto-updates);
+iOS via TestFlight (existing internal group, auto-distributed — accept the update in TestFlight).
+Priority test areas: **kg weight flow end-to-end** and **map-pin address → nearby store**
+(highest risk), then item photos and search/sort. iOS-specific: the native photo action sheet,
+weigh-entry keyboard, and Apple Maps pin (iOS uses Apple Maps, not Google).
+
+**Rollback**: iOS — remove the new build from the TestFlight group (prior builds 15/9/9 remain).
+Android — halt the 1.2.1 release in Play Console (prior vc stays). Backend — redeploy prior
+Cloud Run revision; migration is additive-only so no down-migration.
+
 ## Deviations / fallbacks used
 
 ### TASK 1 — Item images
