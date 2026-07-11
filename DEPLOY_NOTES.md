@@ -46,6 +46,21 @@ server geocode fallback and the Android map tiles won't work:
 **Recommendation:** use two separate keys (one server-restricted for Geocoding, one
 Android-app-restricted for the Maps SDK) so a leaked app key can't burn geocoding quota.
 
+## TASK 5.1 — Pre-deploy verification results (2026-07-11)
+
+| Check | Result |
+|---|---|
+| Backend full suite | **64 passed** (46 baseline + 8 item-image + 5 weight-flow + 5 geo/address; b2 rewritten to the new required-coords contract) |
+| Backend lint | New files (`items.py`, `geo.py`, 4 test files) **ruff-clean**; `ruff==0.15.21` added to requirements-dev.txt. Remaining 27 ruff findings in touched files are pre-existing style (E701 one-liners, unused legacy imports) on lines this round didn't add — left alone per no-refactor rule. |
+| Admin | `tsc --noEmit` clean; eslint **152 problems (baseline was 153 — improved)** |
+| Customer/store/rider JS | All changed files pass babel JSX parse; customer app verified live on web target |
+| Smoke 1 — store uploads image → customer app | PASS (API: store-owner multipart upload → `image_url` in `/services`; web UI: Blazer thumbnail renders in item card, placeholder for others) |
+| Smoke 2 — kg order + Razorpay estimate → adjusted bill | PASS (scripted: online order ₹387 est → paid via real HMAC verify vs test keys in `dev.yaml` → rider weighs 3.6 kg → total ₹464.40, payment stays `paid`, `bill_revisions` weight_update entry written) |
+| Smoke 3 — pinned address → nearby store → order | PASS (test_f3: map_pin address stores GeoJSON, `/stores/nearby` matches seeded store; orders placed against pinned seeded address in test_f2) |
+| Smoke 4 — search + sort, clear → layout identical | PASS (web screenshots: baseline vs cleared identical; search hides chips, flat cross-category results with labels, empty state "No items found for 'zzzz'", chips restore on clear) |
+| Smoke 5 — OTP login regression | PASS via test_c1 (dev OTP flow + password bypass). **Live Twilio send not testable locally** — verify one OTP post-deploy (Twilio creds already a known prod item). |
+| Map picker UI | Web-fallback modal verified on web target. **Native map (Android) untestable until BLOCKER B-1 key exists** — code degrades gracefully (blank map tiles without key). |
+
 ## Deviations / fallbacks used
 
 ### TASK 1 — Item images

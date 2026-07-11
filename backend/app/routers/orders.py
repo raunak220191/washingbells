@@ -2,7 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
-import random, string, math, uuid
+import math
+import random
+import string
+import uuid
 from app.core.database import get_db
 from app.core.security import get_current_user
 from app.schemas.schemas import OrderCreate, OrderResponse, RescheduleRequest, WeightUpdate
