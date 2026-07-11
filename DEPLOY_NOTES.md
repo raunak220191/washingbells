@@ -131,6 +131,31 @@ or the Android map renders blank tiles.
 - **Rider**: "Weigh kg items at pickup and enter the exact weight in the app; add item
   photos on the spot. Pickup now completes only after weighing."
 
+## Deploy execution log (2026-07-11, run by Claude on user instruction)
+
+- **Google Maps keys**: the key provided in `gmaps_apikey.env` belongs to a different
+  GCP project (Geocoding probe returned REQUEST_DENIED: "API not activated on your API
+  project") and `washingbells-prod` had zero API keys. Created two restricted keys in
+  `washingbells-prod` instead (file updated in place, gitignored):
+  `washingbells-geocoding-server` (Geocoding API only) and `washingbells-maps-android`
+  (Maps SDK for Android only). Both APIs enabled on the project.
+  ⚠ Recommended follow-up: add an Android app restriction (package
+  `com.washingbells.app` + release SHA-1 from Play App Signing) to the Android key.
+- **Backend**: `google-maps-api-key` secret created (+ accessor for washingbells-run@);
+  deployed `washingbells-api-00012-j97` via `gcloud run deploy --source backend` with
+  `--update-secrets GOOGLE_MAPS_API_KEY=google-maps-api-key:latest`. Health OK;
+  live prod geocode verified (`/geo/forward?q=VIP Road Zirakpur` → 30.636, 76.814);
+  `image_url` visible in prod `/services`.
+- **Migration**: local Mac is not on the Atlas IP access list (TLS alert), so it ran as
+  Cloud Run job `wb-migrate-upgrade-last` (same image digest as the service, same
+  `wb-vpc`/`wb-subnet` direct-VPC egress). Result: **index ensured, 8 addresses + 9
+  active orders backfilled**, exit 0. Job left in place for reuse.
+- **EAS**: `GOOGLE_MAPS_ANDROID_API_KEY` created as a production secret on
+  @rp2201/WashingBells; customer `eas.json` production profile pinned to
+  `"environment": "production"`. Customer build 1.2.0 (versionCode 13) started.
+- **Live OTP send**: not triggered by the agent (would SMS a real phone). Verify with
+  the first tester login on the new build.
+
 ## TASK 5.4 — Post-deploy
 
 - Notify tester (Hardik): the 4 changes above; ask him to focus on the **kg weight
