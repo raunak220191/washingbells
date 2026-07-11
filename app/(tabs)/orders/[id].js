@@ -267,12 +267,43 @@ export default function OrderDetailScreen() {
         {/* Items */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Items</Text>
-          {order.items?.map((item, i) => (
-            <View key={i} style={styles.itemRow}>
-              <Text style={styles.itemName}>{item.item_name} <Text style={styles.itemQty}>x{item.quantity}{item.unit === "kg" ? " kg" : ""}</Text></Text>
-              <Text style={styles.itemPrice}>₹{item.subtotal.toFixed(2)}</Text>
-            </View>
-          ))}
+          {order.items?.map((item, i) => {
+            const isKg = item.unit === "kg";
+            const weighed = isKg && item.actual_qty != null;
+            const delta = weighed && item.tentative_qty != null
+              ? Math.round((item.actual_qty - item.tentative_qty) * item.price * 100) / 100
+              : 0;
+            return (
+              <View key={i} style={styles.itemRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.itemName}>
+                    {item.item_name}{" "}
+                    {isKg ? (
+                      <Text style={styles.itemQty}>
+                        {weighed ? `Confirmed: ${item.actual_qty} kg` : `Estimated: ~${item.quantity} kg`}
+                      </Text>
+                    ) : (
+                      <Text style={styles.itemQty}>x{item.quantity}</Text>
+                    )}
+                  </Text>
+                  {weighed && (
+                    <View style={styles.weighRow}>
+                      <View style={styles.updatedBadge}>
+                        <Text style={styles.updatedBadgeText}>updated</Text>
+                      </View>
+                      {delta !== 0 && (
+                        <Text style={[styles.weighDelta,
+                          { color: delta > 0 ? TINTS.errorText : TINTS.successText }]}>
+                          {delta > 0 ? "+" : "−"}₹{Math.abs(delta).toFixed(0)}
+                        </Text>
+                      )}
+                    </View>
+                  )}
+                </View>
+                <Text style={styles.itemPrice}>₹{item.subtotal.toFixed(2)}</Text>
+              </View>
+            );
+          })}
         </View>
 
         {/* Garment Tags */}
@@ -304,7 +335,10 @@ export default function OrderDetailScreen() {
           {(order.wallet_applied || 0) > 0 && (
             <PriceRow label="Wallet" value={`-₹${order.wallet_applied.toFixed(2)}`} positive />
           )}
-          <PriceRow label="Total" value={order.total_amount} emphasis style={styles.billTotalRow} />
+          <PriceRow
+            label={order.items?.some((it) => it.unit === "kg" && it.actual_qty == null)
+              ? "Estimated total" : "Total"}
+            value={order.total_amount} emphasis style={styles.billTotalRow} />
           <TouchableOpacity style={styles.billBtn} onPress={handleDownloadBill} disabled={billLoading}>
             {billLoading ? <ActivityIndicator color={COLORS.forestGreen} /> : (
               <><Ionicons name="document-text-outline" size={17} color={COLORS.forestGreen} /><Text style={styles.billBtnText}>Download Bill / GST Invoice</Text></>
@@ -483,6 +517,13 @@ const styles = StyleSheet.create({
   itemRow: { flexDirection: "row", justifyContent: "space-between", marginBottom: SPACING.xs },
   itemName: { fontSize: 14, color: COLORS.text },
   itemQty: { color: COLORS.textMuted },
+  weighRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, marginTop: 2 },
+  updatedBadge: {
+    backgroundColor: TINTS.infoBg, borderRadius: RADIUS.full,
+    paddingHorizontal: SPACING.sm, paddingVertical: 1,
+  },
+  updatedBadgeText: { ...TYPE.caption, color: TINTS.infoText, fontWeight: "600" },
+  weighDelta: { ...TYPE.caption, fontWeight: "700" },
   itemPrice: { fontSize: 14, fontWeight: "600", color: COLORS.text },
   // Tags
   tagGrid: { flexDirection: "row", flexWrap: "wrap", gap: 6 },

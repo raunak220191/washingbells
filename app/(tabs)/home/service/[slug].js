@@ -113,6 +113,12 @@ export default function ServiceDetailScreen() {
         {service?.description ? (
           <Text style={styles.description}>{service.description}</Text>
         ) : null}
+        {service?.pricing_unit === "kg" && (
+          <Text style={styles.kgNote}>
+            Quantities are approx. weight — final weight will be confirmed at
+            pickup with a weighing scale.
+          </Text>
+        )}
         {hasCategories && (
           <ChipRow style={styles.chips}>
             {CATEGORY_FILTERS.map((c) => (
@@ -153,6 +159,15 @@ export default function ServiceDetailScreen() {
                 >
                   <Text style={styles.addBtnText}>ADD</Text>
                 </TouchableOpacity>
+              ) : service?.pricing_unit === "kg" ? (
+                <View style={styles.kgStepperWrap}>
+                  <Text style={styles.kgStepperLabel}>Approx. weight (kg)</Text>
+                  <QuantityStepper
+                    quantity={qty}
+                    onIncrement={() => setQty(item.id, qty + 1)}
+                    onDecrement={() => setQty(item.id, qty - 1)}
+                  />
+                </View>
               ) : (
                 <QuantityStepper
                   quantity={qty}
@@ -191,6 +206,19 @@ const styles = StyleSheet.create({
   },
   chips: {
     marginBottom: SPACING.md,
+  },
+  kgNote: {
+    ...TYPE.caption,
+    color: COLORS.textLight,
+    marginBottom: SPACING.md,
+  },
+  kgStepperWrap: {
+    alignItems: "flex-end",
+  },
+  kgStepperLabel: {
+    ...TYPE.caption,
+    color: COLORS.textMuted,
+    marginBottom: 2,
   },
   listContent: {
     paddingHorizontal: SPACING.lg,
