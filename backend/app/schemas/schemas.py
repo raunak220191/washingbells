@@ -189,6 +189,18 @@ class OrderItemResponse(BaseModel):
     subtotal: float
     category: str = "unisex"
     unit: str = "piece"  # "piece" | "kg" | "pair" | ...
+    # Weight-based flow (upgrade_last TASK 2): kg lines carry the customer's
+    # estimate + the scale-confirmed weight. None on piece lines / old orders.
+    line_id: Optional[str] = None
+    item_id: Optional[str] = None
+    tentative_qty: Optional[float] = None
+    actual_qty: Optional[float] = None
+    weighed_by: Optional[dict] = None  # {role, user_id, name}
+    weighed_at: Optional[datetime] = None
+
+
+class WeightUpdate(BaseModel):
+    actual_qty: float
 
 
 class OrderResponse(BaseModel):

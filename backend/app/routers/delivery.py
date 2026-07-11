@@ -397,6 +397,15 @@ async def verify_pickup_otp(trip_id: str, body: OTPVerifyRequest, current_user: 
     if order.get("pickup_otp") != body.otp:
         raise HTTPException(status_code=400, detail="Invalid OTP")
 
+    # Weighing is mandatory for kg lines (upgrade_last TASK 2.3): pickup cannot
+    # complete until every kg line has a scale-confirmed weight.
+    unweighed = [i.get("item_name") for i in order.get("items", [])
+                 if i.get("unit") == "kg" and i.get("actual_qty") is None]
+    if unweighed:
+        raise HTTPException(
+            status_code=400,
+            detail="Weigh all kg items before confirming pickup: " + ", ".join(filter(None, unweighed)))
+
     now = datetime.now(timezone.utc)
     # Auto-issue the store-drop OTP the rider will show the store owner on arrival.
     store_drop_otp = _gen_otp()

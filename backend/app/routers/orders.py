@@ -2,10 +2,10 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from datetime import datetime, timedelta, timezone
 from bson import ObjectId
 from bson.errors import InvalidId
-import random, string, math
+import random, string, math, uuid
 from app.core.database import get_db
 from app.core.security import get_current_user
-from app.schemas.schemas import OrderCreate, OrderResponse, RescheduleRequest
+from app.schemas.schemas import OrderCreate, OrderResponse, RescheduleRequest, WeightUpdate
 from app.routers.cart import _build_cart_response
 from app.services.push_service import notify_customer_order_update
 from app.services.order_notify_service import send_new_order_notifications, dispatch
@@ -106,7 +106,10 @@ async def _calc_coupon_discount(db, code, subtotal, user_id):
     return float(ev["discount_amount"] or 0.0)
 
 def _format_order(order):
-    items = [{"service_name": i["service_name"], "item_name": i["item_name"], "price": i["price"], "quantity": i["quantity"], "subtotal": i["subtotal"], "category": i.get("category", "unisex"), "unit": i.get("unit", "piece")} for i in order.get("items", [])]
+    items = [{"service_name": i["service_name"], "item_name": i["item_name"], "price": i["price"], "quantity": i["quantity"], "subtotal": i["subtotal"], "category": i.get("category", "unisex"), "unit": i.get("unit", "piece"),
+              "line_id": i.get("line_id"), "item_id": i.get("item_id"),
+              "tentative_qty": i.get("tentative_qty"), "actual_qty": i.get("actual_qty"),
+              "weighed_by": i.get("weighed_by"), "weighed_at": i.get("weighed_at")} for i in order.get("items", [])]
     return OrderResponse(
         id=str(order["_id"]), order_number=order["order_number"], user_id=order["user_id"],
         items=items, address=order["address"], pickup_slot=order["pickup_slot"],
@@ -175,9 +178,22 @@ async def create_order(order_data: OrderCreate, current_user: dict = Depends(get
     now = datetime.now(timezone.utc)
     order_number = _generate_order_number()
     garment_tags = _generate_garment_tags(order_number, [i.model_dump() for i in cart_response.items])
+    # Weight-based lines (unit == "kg") start as a customer ESTIMATE: the qty
+    # picked at checkout is tentative until rider/store confirms on a scale
+    # (PATCH /orders/{id}/items/{line_id}/weight). line_id addresses a line.
+    order_items = []
+    for i in cart_response.items:
+        li = i.model_dump()
+        li["line_id"] = uuid.uuid4().hex[:8]
+        if li.get("unit") == "kg":
+            li["tentative_qty"] = li["quantity"]
+            li["actual_qty"] = None
+            li["weighed_by"] = None
+            li["weighed_at"] = None
+        order_items.append(li)
     order_doc = {
         "order_number": order_number, "user_id": user_id,
-        "items": [i.model_dump() for i in cart_response.items],
+        "items": order_items,
         "address": {"id": str(address["_id"]), "label": address["label"], "full_address": address["full_address"], "latitude": address["latitude"], "longitude": address["longitude"], "city": address["city"]},
         "pickup_slot": order_data.pickup_slot.model_dump(),
         "delivery_slot": _ensure_distinct_delivery_slot(
@@ -475,4 +491,142 @@ async def reschedule_order(order_id: str, body: RescheduleRequest, current_user:
         pass
 
     updated = await db.orders.find_one({"_id": ObjectId(order_id)})
+    return _format_order(updated)
+
+
+# ── Weight-based lines: scale confirmation (upgrade_last TASK 2) ─────────────
+# Rider weighs at pickup; store can re-verify/correct until the order leaves
+# processing. Every change reuses the admin bill-edit machinery: recompute with
+# the same rules, bill_revisions audit entry, admin_db_audit, invoice freeze.
+
+WEIGHABLE_STATUSES = ("rider_assigned_pickup", "picked_up", "at_store", "processing")
+MAX_KG_PER_LINE = 100.0
+
+
+@router.patch("/{order_id}/items/{line_id}/weight", response_model=OrderResponse)
+async def update_line_weight(order_id: str, line_id: str, body: WeightUpdate,
+                             current_user: dict = Depends(get_current_user)):
+    """Confirm a kg line's weight on the scale (rider or store)."""
+    role = current_user.get("role")
+    if role not in ("rider", "store_owner", "admin"):
+        raise HTTPException(status_code=403, detail="Rider or store access required")
+    db = get_db()
+    order = await db.orders.find_one({"_id": _safe_oid(order_id, "order")})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+
+    # Actor must be on this order — same linkage checks used elsewhere
+    # (trips for riders, users.store_id for store owners).
+    if role == "rider":
+        trip = await db.trips.find_one({"order_id": order_id, "rider_id": current_user["user_id"]})
+        if not trip:
+            raise HTTPException(status_code=403, detail="You are not assigned to this order")
+    elif role == "store_owner":
+        actor = await db.users.find_one({"_id": ObjectId(current_user["user_id"])})
+        if not actor or not actor.get("store_id") or actor["store_id"] != order.get("store_id"):
+            raise HTTPException(status_code=403, detail="This order belongs to a different store")
+
+    if order.get("status") not in WEIGHABLE_STATUSES:
+        raise HTTPException(
+            status_code=409,
+            detail=f"Weight can only be confirmed between pickup and processing (order is '{order.get('status')}')")
+
+    qty = body.actual_qty
+    if not (0 < qty <= MAX_KG_PER_LINE):
+        raise HTTPException(status_code=400, detail="Weight must be between 0 and 100 kg")
+    if abs(qty - round(qty, 1)) > 1e-9:
+        raise HTTPException(status_code=400, detail="Weight supports at most 1 decimal place (e.g. 3.6)")
+    qty = round(qty, 1)
+
+    # Locate the line — by line_id, with array-index fallback for lines created
+    # before line_id existed (legacy orders, walk-ins).
+    items = order.get("items", [])
+    idx = next((i for i, li in enumerate(items) if li.get("line_id") == line_id), None)
+    if idx is None and line_id.isdigit() and int(line_id) < len(items) and not items[int(line_id)].get("line_id"):
+        idx = int(line_id)
+    if idx is None:
+        raise HTTPException(status_code=404, detail="Order line not found")
+    line = items[idx]
+    if line.get("unit") != "kg":
+        raise HTTPException(status_code=400, detail="Only weight-priced (kg) lines can be weighed")
+
+    now = datetime.now(timezone.utc)
+    actor_doc = await db.users.find_one({"_id": ObjectId(current_user["user_id"])})
+    before_line = {"quantity": line.get("quantity"), "subtotal": line.get("subtotal")}
+
+    if line.get("tentative_qty") is None:
+        line["tentative_qty"] = line.get("quantity")
+    if not line.get("line_id"):
+        line["line_id"] = uuid.uuid4().hex[:8]
+    line["actual_qty"] = qty
+    line["quantity"] = qty
+    line["subtotal"] = round(float(line["price"]) * qty, 2)
+    line["weighed_by"] = {"role": role, "user_id": current_user["user_id"],
+                          "name": (actor_doc or {}).get("name")}
+    line["weighed_at"] = now
+
+    # Recompute totals with the same rules as admin bill edit / order create.
+    subtotal = round(sum(float(li["subtotal"]) for li in items), 2)
+    if order.get("fulfillment_mode", "rider_delivery") == "rider_delivery":
+        from app.services.fee_service import get_fee_config, delivery_fee_for
+        fee_cfg = await get_fee_config(db, order.get("store_id"))
+        delivery_fee = delivery_fee_for(fee_cfg, subtotal)
+    else:
+        delivery_fee = 0.0
+    platform_fee = round(float(order.get("platform_fee_charged", 0.0)), 2)
+    # Coupon: re-evaluate against the new subtotal (same as admin bill edit),
+    # but never block a weighing on a coupon that expired since checkout —
+    # keep the original discount in that case.
+    discount = round(float(order.get("discount", 0.0)), 2)
+    if order.get("coupon_code"):
+        from app.routers.coupons import evaluate_coupon
+        try:
+            ev = await evaluate_coupon(db, order["coupon_code"], subtotal, order.get("user_id"))
+            if ev["valid"]:
+                discount = round(float(ev["discount_amount"] or 0.0), 2)
+        except Exception:
+            pass
+    discount = round(min(discount, subtotal), 2)
+    wallet_applied = round(float(order.get("wallet_applied", 0.0)), 2)
+    total_amount = round(max(subtotal + delivery_fee + platform_fee - discount - wallet_applied, 0), 2)
+
+    # GST audit trail + invoice freeze — identical machinery to admin bill edit.
+    invoice = await db.invoices.find_one({"order_id": order_id})
+    invoice_issued = bool(invoice)
+    revision = {
+        "at": now, "by": current_user["user_id"], "by_role": role,
+        "kind": "weight_update", "line_id": line["line_id"], "item_name": line.get("item_name"),
+        "before": {"quantity": before_line["quantity"], "line_subtotal": before_line["subtotal"],
+                   "subtotal": order.get("subtotal"), "total_amount": order.get("total_amount")},
+        "after": {"quantity": qty, "line_subtotal": line["subtotal"],
+                  "subtotal": subtotal, "total_amount": total_amount},
+        "invoice_was_issued": invoice_issued,
+        "invoice_number": (invoice or {}).get("invoice_number"),
+        "note": f"Weight confirmed by {role}: {line.get('item_name')} "
+                f"{before_line['quantity']} kg → {qty} kg",
+    }
+    set_fields = {"items": items, "subtotal": subtotal, "delivery_fee": delivery_fee,
+                  "discount": discount, "total_amount": total_amount, "updated_at": now}
+    if invoice_issued:
+        set_fields["invoice_stale"] = True
+    await db.orders.update_one({"_id": order["_id"]},
+                               {"$set": set_fields, "$push": {"bill_revisions": revision}})
+    from app.routers.admin import _audit_edit
+    await _audit_edit(
+        db, current_user, "orders", order_id,
+        {"line_quantity": before_line["quantity"], "subtotal": order.get("subtotal"),
+         "total_amount": order.get("total_amount")},
+        {"line_quantity": qty, "subtotal": subtotal, "total_amount": total_amount})
+
+    # Existing order-updated notification path so all clients refresh. Any
+    # already-paid difference follows the existing bill-adjustment flow
+    # (invoice_stale + audit + admin settlement) — no new payment paths.
+    delta = round(total_amount - float(order.get("total_amount", 0)), 2)
+    msg = f"{line.get('item_name')} weighed: {qty} kg. Updated total: ₹{total_amount:.0f}"
+    if delta:
+        msg += f" ({'+' if delta > 0 else '-'}₹{abs(delta):.0f})"
+    dispatch(notify_customer_order_update(order["user_id"], order["order_number"],
+                                          order.get("status", ""), msg))
+
+    updated = await db.orders.find_one({"_id": order["_id"]})
     return _format_order(updated)

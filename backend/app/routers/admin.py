@@ -282,6 +282,8 @@ async def get_admin_order_detail(order_id: str, current_user: dict = Depends(get
         "delivery_slot": order.get("delivery_slot"),
         "special_instructions": order.get("special_instructions"),
         "status_timeline": order.get("status_timeline", []),
+        "bill_revisions": order.get("bill_revisions", []),
+        "invoice_stale": order.get("invoice_stale", False),
         "garment_tags": order.get("garment_tags", []),
         "pickup_proof_photos": order.get("pickup_proof_photos", []),
         "pickup_photos_at": order.get("pickup_photos_at"),
@@ -346,11 +348,16 @@ async def admin_edit_order_bill(order_id: str, body: dict, current_user: dict = 
         name = (ri.get("item_name") or "").strip()
         if not name or price < 0 or qty <= 0:
             continue
+        # Preserve weight-flow metadata (upgrade_last TASK 2) so an admin bill
+        # edit doesn't wipe line_id / weighing audit fields off the lines.
+        extra = {k: ri[k] for k in ("line_id", "item_id", "tentative_qty",
+                                    "actual_qty", "weighed_by", "weighed_at") if k in ri}
         line_items.append({
             "service_name": (ri.get("service_name") or "").strip() or "Service",
             "item_name": name, "price": price, "quantity": qty, "unit": unit,
             "subtotal": round(price * qty, 2),
             "category": ri.get("category", "unisex"),
+            **extra,
         })
     if not line_items:
         raise HTTPException(status_code=400, detail="A bill needs at least one valid line item")
