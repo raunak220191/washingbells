@@ -67,6 +67,15 @@ export const useTripStore = create((set, get) => ({
     return res.data;
   },
 
+  // Weight-based lines: confirm a kg line on the scale (upgrade_last TASK 2.3).
+  // Refreshes the worklist so actual_qty/subtotals sync into trip.items.
+  updateLineWeight: async (orderId, lineId, actualQty) => {
+    const res = await api.patch(`/orders/${orderId}/items/${lineId}/weight`,
+      { actual_qty: actualQty });
+    await get().fetchWorklist();
+    return res.data;
+  },
+
   verifyPickupOTP: async (tripId, otp) => {
     const res = await api.post(`/delivery/${tripId}/verify-pickup-otp`, { otp });
     await get().fetchWorklist();

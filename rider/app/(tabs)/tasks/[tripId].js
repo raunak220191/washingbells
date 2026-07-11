@@ -41,6 +41,63 @@ function deriveStep(trip) {
   return 0;
 }
 
+// Inline scale-entry for one kg line: numeric input (1 decimal) pre-filled
+// with the customer's estimate, Confirm calls the weight PATCH and the
+// worklist refresh brings back the recalculated line subtotal.
+function WeighRow({ orderId, item }) {
+  const { updateLineWeight } = useTripStore();
+  const [val, setVal] = useState(
+    String(item.actual_qty ?? item.tentative_qty ?? item.quantity ?? "")
+  );
+  const [busy, setBusy] = useState(false);
+
+  const confirm = async () => {
+    if (!/^\d{1,3}(\.\d)?$/.test(val.trim())) {
+      Alert.alert("Invalid weight", "Use a number with at most 1 decimal place, e.g. 3.6");
+      return;
+    }
+    const q = parseFloat(val);
+    if (!(q > 0 && q <= 100)) {
+      Alert.alert("Invalid weight", "Weight must be between 0 and 100 kg.");
+      return;
+    }
+    setBusy(true);
+    try {
+      await updateLineWeight(orderId, item.line_id, q);
+    } catch (e) {
+      Alert.alert("Error", e?.response?.data?.detail || "Could not save the weight. Try again.");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <View style={styles.weighRow}>
+      <TextInput
+        style={styles.weighInput}
+        keyboardType="decimal-pad"
+        value={val}
+        onChangeText={setVal}
+        placeholder="0.0"
+        placeholderTextColor={COLORS.textMuted}
+        accessibilityLabel={`Weighed quantity for ${item.item_name}`}
+      />
+      <Text style={styles.weighUnit}>kg</Text>
+      <TouchableOpacity
+        style={[styles.weighBtn, busy && styles.btnDisabled]}
+        onPress={confirm}
+        disabled={busy}
+      >
+        {busy ? (
+          <ActivityIndicator size="small" color={COLORS.white} />
+        ) : (
+          <Text style={styles.weighBtnText}>{item.actual_qty != null ? "Update" : "Confirm"}</Text>
+        )}
+      </TouchableOpacity>
+    </View>
+  );
+}
+
 export default function ActiveTaskScreen() {
   const router = useRouter();
   const { tripId } = useLocalSearchParams();
@@ -52,6 +109,8 @@ export default function ActiveTaskScreen() {
   } = useTripStore();
 
   const trip = worklist.find(t => t.id === tripId);
+  // kg lines must be scale-confirmed before pickup can complete (TASK 2.3)
+  const unweighedKg = (trip?.items || []).filter(i => i.unit === "kg" && i.actual_qty == null);
   const [currentStep, setCurrentStep] = useState(() => deriveStep(trip));
   const [photos, setPhotos] = useState([]);
   const [otp, setOtp] = useState("");
@@ -320,11 +379,26 @@ export default function ActiveTaskScreen() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.itemName}>{it.item_name}</Text>
                   <Text style={styles.itemMeta}>
-                    {it.quantity}{it.unit === "kg" ? " kg" : ""} · ₹{it.subtotal}
+                    {it.unit === "kg"
+                      ? (it.actual_qty != null
+                          ? `Confirmed: ${it.actual_qty} kg · ₹${it.subtotal}`
+                          : `Customer estimate: ~${it.tentative_qty ?? it.quantity} kg`)
+                      : `x${it.quantity} · ₹${it.subtotal}`}
                   </Text>
+                  {it.unit === "kg" && (
+                    <WeighRow orderId={trip.order_id} item={it} />
+                  )}
                 </View>
               </View>
             ))}
+            {unweighedKg.length > 0 && (
+              <View style={styles.weighHintRow}>
+                <Ionicons name="scale-outline" size={14} color={COLORS.warning} />
+                <Text style={styles.weighHintText}>
+                  Weigh all kg items on the scale — pickup can't be confirmed until done.
+                </Text>
+              </View>
+            )}
           </View>
         )}
 
@@ -406,10 +480,16 @@ export default function ActiveTaskScreen() {
               textAlign="center"
             />
 
+            {unweighedKg.length > 0 && (
+              <Text style={styles.weighBlockText}>
+                {unweighedKg.length} kg item{unweighedKg.length > 1 ? "s" : ""} still
+                unweighed — enter the scale weight above first.
+              </Text>
+            )}
             <TouchableOpacity
-              style={[styles.primaryBtn, otp.length < 4 && styles.btnDisabled]}
+              style={[styles.primaryBtn, (otp.length < 4 || unweighedKg.length > 0) && styles.btnDisabled]}
               onPress={handleVerifyPickupOTP}
-              disabled={otp.length < 4 || loading}
+              disabled={otp.length < 4 || loading || unweighedKg.length > 0}
             >
               {loading ? <ActivityIndicator color={COLORS.white} /> : (
                 <>
@@ -591,6 +671,28 @@ const styles = StyleSheet.create({
   },
   itemName: { fontSize: 14, fontWeight: "600", color: COLORS.black },
   itemMeta: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  weighRow: { flexDirection: "row", alignItems: "center", gap: SPACING.sm, marginTop: SPACING.sm },
+  weighInput: {
+    borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.md, paddingVertical: 6, minWidth: 72,
+    fontSize: 15, fontWeight: "600", color: COLORS.black, backgroundColor: COLORS.white,
+    textAlign: "center",
+  },
+  weighUnit: { fontSize: 13, color: COLORS.textMuted, fontWeight: "600" },
+  weighBtn: {
+    backgroundColor: COLORS.forestGreen, borderRadius: RADIUS.md,
+    paddingHorizontal: SPACING.lg, paddingVertical: 8, minWidth: 84, alignItems: "center",
+  },
+  weighBtnText: { color: COLORS.white, fontSize: 13, fontWeight: "700" },
+  weighHintRow: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    marginTop: SPACING.sm, paddingTop: SPACING.sm,
+    borderTopWidth: 1, borderTopColor: COLORS.borderLight,
+  },
+  weighHintText: { flex: 1, fontSize: 12, color: COLORS.warning },
+  weighBlockText: {
+    fontSize: 12, color: COLORS.warning, textAlign: "center", marginBottom: SPACING.sm,
+  },
 
   actionCard: {
     backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, padding: SPACING.xl,
