@@ -125,6 +125,18 @@ export default function DashboardScreen() {
           <Ionicons name="add-circle" size={26} color={COLORS.storeOrange} />
         </TouchableOpacity>
 
+        {/* Item photo management */}
+        <TouchableOpacity style={styles.itemPhotosBtn} onPress={() => router.push("/(tabs)/home/item-images")}>
+          <View style={styles.itemPhotosIcon}>
+            <Ionicons name="images" size={22} color={COLORS.white} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.walkInTitle}>Item Photos</Text>
+            <Text style={styles.walkInSub}>Add photos customers see for each item</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={22} color={COLORS.forestGreen} />
+        </TouchableOpacity>
+
         {/* New Orders Alert */}
         {newOrders > 0 && (
           <TouchableOpacity style={styles.alertBanner} onPress={() => router.push("/(tabs)/orders")}>
@@ -204,6 +216,8 @@ const styles = StyleSheet.create({
   walkInIcon: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: COLORS.storeOrange, justifyContent: "center", alignItems: "center" },
   walkInTitle: { fontSize: 15, fontWeight: "800", color: COLORS.black },
   walkInSub: { fontSize: 12, color: COLORS.textMuted, marginTop: 2 },
+  itemPhotosBtn: { flexDirection: "row", alignItems: "center", gap: SPACING.md, backgroundColor: COLORS.white, marginHorizontal: SPACING.lg, padding: SPACING.lg, borderRadius: RADIUS.lg, marginBottom: SPACING.md, borderWidth: 1.5, borderColor: COLORS.forestGreen, ...SHADOW },
+  itemPhotosIcon: { width: 44, height: 44, borderRadius: RADIUS.md, backgroundColor: COLORS.forestGreen, justifyContent: "center", alignItems: "center" },
   alertText: { flex: 1, color: COLORS.white, fontWeight: "700", fontSize: 14 },
   section: { paddingHorizontal: SPACING.lg, paddingBottom: 40 },
   sectionHeader: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: SPACING.md },

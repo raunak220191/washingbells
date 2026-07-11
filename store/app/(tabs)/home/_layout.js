@@ -4,6 +4,7 @@ export default function HomeLayout() {
     <Stack screenOptions={{ headerShown: false }}>
       <Stack.Screen name="index" />
       <Stack.Screen name="walk-in" />
+      <Stack.Screen name="item-images" />
     </Stack>
   );
 }
