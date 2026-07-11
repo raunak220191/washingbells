@@ -156,6 +156,26 @@ or the Android map renders blank tiles.
 - **Live OTP send**: not triggered by the agent (would SMS a real phone). Verify with
   the first tester login on the new build.
 
+## iOS cycle (upgrade_last_ios.md) — TASK 0 preflight results (2026-07-11)
+
+| Check | Result |
+|---|---|
+| eas.json iOS profiles | All 3 apps have `submit.production.ios` with ascAppId (customer 6783028568, store 6783029144, rider 6783028830); same ASC API key `L6HNMZ4MQ5`. Bundle IDs untouched. |
+| Last TestFlight build numbers (ASC API, live) | **customer 15 · store 9 · rider 9** — all VALID/unexpired. iOS buildNumber convention = **EAS remote autoIncrement** (no `ios.buildNumber` in app.json; `appVersionSource: remote`) → next builds are 16/10/10, strictly greater ✓ |
+| Credentials | iOS distribution cert "Hardik Vashisht" valid to **2027-06-22** (ASC API). EAS-managed profiles proved by 07-05/07-08 finished builds. |
+| Push | `PUSH_NOTIFICATIONS` capability on all 3 bundle IDs; APNs key is EAS-managed and worked for prior TF builds (final proof at build time). |
+| Maps on iOS | **Apple Maps chosen** (default provider). `MapPinPicker.js` already gates: `provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}` — no iOS key needed, Android path untouched. |
+| Export compliance | Already satisfied: `ITSAppUsesNonExemptEncryption=false` present in all 3 app.json infoPlists (the plist key `ios.config.usesNonExemptEncryption` maps to). No duplicate key added. |
+| Sign in with Apple | Not required — phone OTP only; grep confirms zero Google/Facebook/Apple social login usage. |
+| TestFlight groups | Internal groups exist on all 3 apps with `hasAccessToAllBuilds=true` (auto-distribution — new builds reach testers with no manual assignment). |
+
+**Mid-flight state reconciliation (Android cycle interrupted for iOS parity):**
+customer Android 1.2.0 (vc 13) was already submitted to Play internal before the
+both-platforms rule arrived; store Android 1.2.0 was built but NOT submitted; rider not
+built. All three apps will be REBUILT for both platforms after the iOS-parity commits +
+version bump (1.2.1) so every shipped artifact contains identical JS. vc13 stays on the
+track (superseded by the 1.2.1 build; same track, no promotion — clock unaffected).
+
 ## TASK 5.4 — Post-deploy
 
 - Notify tester (Hardik): the 4 changes above; ask him to focus on the **kg weight
