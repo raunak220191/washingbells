@@ -1,5 +1,28 @@
 # DEPLOY_NOTES — upgrade_last.md execution (2026-07-11)
 
+## What shipped (code complete, NOT yet deployed)
+
+1. **Item images (TASK 1)** — one image per catalog item, uploaded by store (Item
+   Photos screen) or rider (pickup Order Items card), Pillow-processed server-side,
+   shown in customer item cards (`ItemThumb`) and the admin services table (+lightbox).
+2. **Weight-based orders (TASK 2)** — kg lines carry `tentative_qty` → rider/store
+   confirm `actual_qty` on a scale (`PATCH /orders/{id}/items/{line_id}/weight`);
+   totals recompute through the existing bill-edit machinery with full audit
+   (`bill_revisions` + `admin_db_audit` + invoice-freeze). Pickup OTP is blocked until
+   all kg lines are weighed. Customer sees Estimated ~ / Confirmed + delta; admin sees
+   est→actual, who/when, and a Bill Audit list.
+3. **Map-pin addresses (TASK 3)** — mandatory pin (map on native, geocode/GPS fallback
+   on web) with `location_source`; GeoJSON Point on addresses + 2dsphere; server-side
+   geocode proxy `GET /geo/forward` (rate-limited, key stays in backend env); new
+   addresses without locatable coords are rejected with a clear error; legacy addresses
+   get a non-blocking "pin now" banner.
+4. **Sort + search (TASK 4)** — locale-aware A→Z within category (memoized) on both
+   item screens; debounced SearchBar above the chips, flat cross-category results with
+   category labels, perfect state restore on clear; category chips untouched.
+
+Deploy state: **stopped before TASK 5.2–5.4 execution** per instructions — migration
+script, version bumps (1.2.0) and all commands are ready below.
+
 ## Baseline (recorded before TASK 1)
 
 Verified repo layout (differs from task-file placeholders):
@@ -61,6 +84,67 @@ Android-app-restricted for the Maps SDK) so a leaked app key can't burn geocodin
 | Smoke 5 — OTP login regression | PASS via test_c1 (dev OTP flow + password bypass). **Live Twilio send not testable locally** — verify one OTP post-deploy (Twilio creds already a known prod item). |
 | Map picker UI | Web-fallback modal verified on web target. **Native map (Android) untestable until BLOCKER B-1 key exists** — code degrades gracefully (blank map tiles without key). |
 
+## TASK 5.2 — Backend deploy (commands for you to run)
+
+```bash
+# 0. Env FIRST (see BLOCKER B-1): set the server geocoding key
+#    - locally: backend/.env  → GOOGLE_MAPS_API_KEY=<server key>
+#    - prod:    add/update the secret used by the washingbells-api Cloud Run
+#      service (Secret Manager), same var name, BEFORE deploying code.
+
+# 1. Migration (idempotent — safe to re-run) against prod Atlas:
+cd backend && MONGODB_URL='<atlas-uri>' ./venv/bin/python -m scripts.migrate_upgrade_last
+
+# 2. Deploy via the existing pipeline:
+gcloud run deploy washingbells-api --source backend   # same as previous releases
+
+# 3. Post-deploy verify:
+curl -s https://api.washingbells.com/health
+# + trigger one live OTP send from the customer app (Twilio regression)
+```
+
+## TASK 5.3 — Mobile builds (EAS) — versions already bumped to 1.2.0
+
+```bash
+# Customer app (repo root — root .easignore already scopes customer builds):
+eas build --platform android --profile production
+eas submit --platform android --latest     # same closed-testing track — do NOT promote
+
+# Store app (swap the scoped .easignore first — known gotcha):
+cp .easignore-store .easignore && (cd store && EAS_NO_VCS=1 eas build --platform android --profile production) && git checkout .easignore
+(cd store && eas submit --platform android --latest)
+
+# Rider app:
+cp .easignore-rider .easignore && (cd rider && EAS_NO_VCS=1 eas build --platform android --profile production) && git checkout .easignore
+(cd rider && eas submit --platform android --latest)
+```
+`versionCode` auto-increments (eas.json `autoIncrement: true`). Remember: the customer
+EAS build needs the `GOOGLE_MAPS_ANDROID_API_KEY` EAS env var set first (BLOCKER B-1),
+or the Android map renders blank tiles.
+
+### "What's new" notes (plain language, per app)
+
+- **Customer**: "See photos of every laundry item, search the item list, and pin your
+  exact location on a map so we always find your nearest store."
+- **Store**: "Add photos to catalog items and confirm exact weights for kg orders —
+  bills update automatically with a full audit trail."
+- **Rider**: "Weigh kg items at pickup and enter the exact weight in the app; add item
+  photos on the spot. Pickup now completes only after weighing."
+
+## TASK 5.4 — Post-deploy
+
+- Notify tester (Hardik): the 4 changes above; ask him to focus on the **kg weight
+  flow end-to-end** and **map-pin address → nearby store** (highest risk), then item
+  photos and search/sort.
+- Monitor for the first hour (Cloud Run logs, washingbells-api): `POST /items/*/image`
+  errors, `GET /geo/forward` 4xx/5xx (429 = rate limit, 503 = key missing),
+  `PATCH /orders/*/items/*/weight` failures.
+- **Rollback plan**: previous AABs remain on the closed-testing track (halt the 1.2.0
+  rollout in Play Console); backend → redeploy the previous Cloud Run revision
+  (`gcloud run services update-traffic washingbells-api --to-revisions <prev>=100`).
+  The migration is additive-only (new fields/indexes) — old code ignores them, so no
+  down-migration is needed.
+
 ## Deviations / fallbacks used
 
 ### TASK 1 — Item images
@@ -80,3 +164,31 @@ Android-app-restricted for the Maps SDK) so a leaked app key can't burn geocodin
   created before lines stored `item_id`).
 - Customer app got a new display-only `ItemThumb` primitive (`components/common/ItemThumb.js`)
   per the design-system rule that repeated visual blocks live in primitives.
+
+### TASK 2 — Weight flow
+- **No formal "extra due / refund credit" model exists** in the codebase; the existing
+  bill-adjustment flow is: totals change + `bill_revisions` audit + `invoice_stale`
+  flag/warning when an invoice was already issued + manual admin settlement. The weight
+  PATCH follows exactly that — no new payment paths (per task instruction).
+- Weight recompute includes `platform_fee_charged` (parity with order creation; the
+  admin bill editor's omission of platform fee is pre-existing and untouched).
+- Coupon re-evaluation on weight change falls back to the ORIGINAL discount if the
+  coupon no longer validates (e.g. expired since checkout) — weighing must never block
+  a rider mid-pickup on a coupon error.
+- Line addressing: new order lines carry `line_id`; legacy/walk-in lines are addressed
+  by array index once, then get a generated `line_id`. Migration backfills active orders.
+
+### TASK 3 — Addresses
+- **Contract change**: `POST /addresses` now returns 400 when the address has no
+  coordinates AND server geocoding can't resolve it. Old app builds keep working when
+  the server key is configured (geocode fallback fills coords) — which is why setting
+  `GOOGLE_MAPS_API_KEY` in prod (B-1) matters. `tests/test_b2` was rewritten to the
+  new contract.
+- Store matching still queries by lat/lng against the stores 2dsphere index (unchanged
+  path); addresses additionally persist a GeoJSON Point + own 2dsphere index for
+  future address-side geo queries.
+
+### TASK 4 — Search/sort
+- No design-system `Input` primitive existed; added `components/common/SearchBar.js`
+  as a new primitive (Material-3 style, leading icon, clear button) rather than styling
+  a raw TextInput in the screen (design-system rule).
