@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert,
-  TextInput, ActivityIndicator, Image, Modal, FlatList,
+  TextInput, ActivityIndicator, Image, Modal, FlatList, Platform, KeyboardAvoidingView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -43,11 +43,13 @@ function StoreWeighRow({ orderId, item }) {
   const [busy, setBusy] = useState(false);
 
   const confirm = async () => {
-    if (!/^\d{1,3}(\.\d)?$/.test(val.trim())) {
+    // iOS decimal-pad emits "," on many locales — normalize before validating
+    const normalized = val.trim().replace(",", ".");
+    if (!/^\d{1,3}(\.\d)?$/.test(normalized)) {
       Alert.alert("Invalid weight", "Use a number with at most 1 decimal place, e.g. 3.6");
       return;
     }
-    const q = parseFloat(val);
+    const q = parseFloat(normalized);
     if (!(q > 0 && q <= 100)) {
       Alert.alert("Invalid weight", "Weight must be between 0 and 100 kg.");
       return;
@@ -339,7 +341,12 @@ export default function OrderDetailScreen() {
         )}
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }}>
+      {/* iOS: keep the weigh input + confirm visible above the keyboard */}
+      <KeyboardAvoidingView
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+        style={{ flex: 1 }}
+      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled">
 
         {/* Walk-in / fulfillment banner */}
         {isWalkIn ? (
@@ -692,6 +699,7 @@ export default function OrderDetailScreen() {
           </View>
         ) : null}
       </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Rider Picker Modal */}
       <Modal
