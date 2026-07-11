@@ -32,6 +32,7 @@ import { COLORS, SPACING, RADIUS } from "../../../constants/theme";
 import { useAddressStore } from "../../../stores/addressStore";
 import Button from "../../../components/common/Button";
 import Screen from "../../../components/common/Screen";
+import MapPinPicker from "../../../components/common/MapPinPicker";
 
 const { width: SCREEN_W } = Dimensions.get("window");
 
@@ -138,6 +139,10 @@ export default function AddressScreen() {
   const [latitude, setLatitude] = useState(0);
   const [longitude, setLongitude] = useState(0);
   const [isDefault, setIsDefault] = useState(false);
+  // TASK 3.1: coordinates are mandatory; track how they were set + map modal
+  const [locationSource, setLocationSource] = useState(null); // gps | geocode | map_pin
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [pinBannerDismissed, setPinBannerDismissed] = useState(false);
 
   useEffect(() => {
     fetchAddresses();
@@ -183,6 +188,7 @@ export default function AddressScreen() {
     setPincode("");
     setLatitude(0);
     setLongitude(0);
+    setLocationSource(null);
     setIsDefault(false);
     setEditingId(null);
     setFormErrors({});
@@ -203,6 +209,7 @@ export default function AddressScreen() {
     setPincode(addr.pincode);
     setLatitude(addr.latitude);
     setLongitude(addr.longitude);
+    setLocationSource(addr.location_source || (addr.latitude ? "gps" : null));
     setIsDefault(addr.is_default);
     setEditingId(addr.id);
     setFormErrors({});
@@ -229,6 +236,8 @@ export default function AddressScreen() {
 
       setLatitude(loc.coords.latitude);
       setLongitude(loc.coords.longitude);
+      setLocationSource("gps");
+      if (formErrors.location) setFormErrors((p) => ({ ...p, location: "" }));
 
       const [geo] = await Location.reverseGeocodeAsync({
         latitude: loc.coords.latitude,
@@ -262,6 +271,10 @@ export default function AddressScreen() {
     if (!city.trim()) errors.city = "City is required";
     if (!pincode.trim() || pincode.length < 6)
       errors.pincode = "Enter a valid 6-digit pincode";
+    // TASK 3.1: coordinates are mandatory — without them nearby-store
+    // matching can never find a store for this address.
+    if (!latitude || !longitude)
+      errors.location = "Pin your location on the map to save this address";
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -269,30 +282,13 @@ export default function AddressScreen() {
   const handleSave = async () => {
     if (!validateForm()) return;
 
-    // B2: never invent coordinates. GPS (if captured) wins; otherwise geocode
-    // the typed address on-device; otherwise send nulls and let the server
-    // geocode. The old `|| 30.9` default silently pinned every no-GPS address
-    // to Ludhiana, which broke store matching for everyone else.
-    let lat = latitude || null;
-    let lng = longitude || null;
-    if (!lat || !lng) {
-      try {
-        const results = await Location.geocodeAsync(
-          `${fullAddress.trim()}, ${city.trim()} ${pincode.trim()}`
-        );
-        if (results?.length && results[0]?.latitude != null) {
-          lat = results[0].latitude;
-          lng = results[0].longitude;
-        }
-      } catch {}
-    }
-
     const data = {
       label,
       full_address: fullAddress.trim(),
       landmark: landmark.trim() || null,
-      latitude: lat,
-      longitude: lng,
+      latitude,
+      longitude,
+      location_source: locationSource || "map_pin",
       city: city.trim(),
       state: state.trim() || "Punjab",
       pincode: pincode.trim(),
@@ -388,6 +384,36 @@ export default function AddressScreen() {
             <Ionicons name="arrow-forward-circle" size={28} color={COLORS.gold} />
           </View>
         </TouchableOpacity>
+
+        {/* ── Legacy addresses without a map pin (TASK 3.1) — non-blocking,
+            one-time prompt to pin so nearby-store matching works ── */}
+        {!pinBannerDismissed &&
+          addresses.some((a) => !a.latitude || !a.longitude) && (
+            <TouchableOpacity
+              style={s.pinBanner}
+              activeOpacity={0.85}
+              onPress={() => {
+                const unpinned = addresses.find((a) => !a.latitude || !a.longitude);
+                if (unpinned) {
+                  openEditForm(unpinned);
+                  setTimeout(() => setShowMapPicker(true), 350);
+                }
+              }}
+            >
+              <Ionicons name="location-outline" size={18} color={COLORS.gold} />
+              <Text style={s.pinBannerText}>
+                Some addresses are missing a map pin, so nearby stores can't be
+                found for them. Tap to pin now.
+              </Text>
+              <TouchableOpacity
+                onPress={() => setPinBannerDismissed(true)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                accessibilityLabel="Dismiss"
+              >
+                <Ionicons name="close" size={16} color={COLORS.textMuted} />
+              </TouchableOpacity>
+            </TouchableOpacity>
+          )}
 
         {/* ── Divider with label ── */}
         <View style={s.dividerRow}>
@@ -693,20 +719,37 @@ export default function AddressScreen() {
             </TouchableOpacity>
           </View>
 
-          {/* ── GPS Confirmation ── */}
-          {latitude !== 0 && longitude !== 0 && (
-            <View style={s.gpsConfirm}>
-              <View style={s.gpsConfirmDot} />
-              <Ionicons
-                name="checkmark-circle"
-                size={16}
-                color={COLORS.success}
-              />
-              <Text style={s.gpsConfirmText}>
-                GPS coordinates captured • {latitude.toFixed(4)}°N, {longitude.toFixed(4)}°E
-              </Text>
-            </View>
-          )}
+          {/* ── Pin location on map (mandatory, TASK 3.1) ── */}
+          <View style={s.formSection}>
+            <Text style={s.formSectionTitle}>Location Pin *</Text>
+            <TouchableOpacity
+              style={[s.pinCard, formErrors.location ? s.pinCardError : null]}
+              onPress={() => setShowMapPicker(true)}
+              activeOpacity={0.8}
+            >
+              <View style={s.pinIconWrap}>
+                <Ionicons
+                  name={latitude && longitude ? "location" : "location-outline"}
+                  size={20}
+                  color={latitude && longitude ? COLORS.success : COLORS.gold}
+                />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={s.pinTitle}>
+                  {latitude && longitude ? "Location pinned" : "Pin location on map"}
+                </Text>
+                <Text style={s.pinSub}>
+                  {latitude && longitude
+                    ? `${latitude.toFixed(4)}°, ${longitude.toFixed(4)}° • tap to adjust`
+                    : "Required — so we can find laundry stores near you"}
+                </Text>
+              </View>
+              <Ionicons name="chevron-forward" size={16} color={COLORS.textMuted} />
+            </TouchableOpacity>
+            {formErrors.location ? (
+              <Text style={s.pinError}>{formErrors.location}</Text>
+            ) : null}
+          </View>
         </ScrollView>
 
         {/* ── Bottom Save Bar ── */}
@@ -797,6 +840,21 @@ export default function AddressScreen() {
       <View style={s.body}>
         {mode === "list" ? renderList() : renderForm()}
       </View>
+
+      {/* ── Map pin picker (native map / web fallback) ── */}
+      <MapPinPicker
+        visible={showMapPicker}
+        initial={latitude && longitude ? { latitude, longitude } : null}
+        addressText={[fullAddress, city, pincode].filter(Boolean).join(", ")}
+        onClose={() => setShowMapPicker(false)}
+        onConfirm={({ latitude: lat, longitude: lng, source }) => {
+          setLatitude(lat);
+          setLongitude(lng);
+          setLocationSource(source);
+          setFormErrors((p) => ({ ...p, location: "" }));
+          setShowMapPicker(false);
+        }}
+      />
     </Screen>
   );
 }
@@ -1320,6 +1378,61 @@ const s = StyleSheet.create({
     fontSize: 12,
     color: COLORS.success,
     fontWeight: "500",
+  },
+
+  // ── Location pin (TASK 3.1) ──
+  pinCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.md,
+    backgroundColor: COLORS.white,
+    borderWidth: 1.5,
+    borderColor: COLORS.borderLight,
+    borderRadius: RADIUS.md,
+    padding: SPACING.lg,
+  },
+  pinCardError: {
+    borderColor: COLORS.error,
+  },
+  pinIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: RADIUS.full,
+    backgroundColor: COLORS.cream,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  pinTitle: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: COLORS.text,
+  },
+  pinSub: {
+    fontSize: 12,
+    color: COLORS.textMuted,
+    marginTop: 2,
+  },
+  pinError: {
+    fontSize: 12,
+    color: COLORS.error,
+    marginTop: SPACING.xs,
+    marginLeft: SPACING.xs,
+  },
+  pinBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: SPACING.sm,
+    backgroundColor: COLORS.gold + "15",
+    borderWidth: 1,
+    borderColor: COLORS.gold + "40",
+    borderRadius: RADIUS.md,
+    padding: SPACING.md,
+    marginBottom: SPACING.lg,
+  },
+  pinBannerText: {
+    flex: 1,
+    fontSize: 12,
+    color: COLORS.text,
   },
 
   // ── Footer ──
