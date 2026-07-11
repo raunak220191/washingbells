@@ -1408,7 +1408,7 @@ async def admin_list_services(current_user: dict = Depends(get_current_user)):
         "pricing_unit": s.get("pricing_unit", "piece"),
         "service_type": s.get("service_type", "pickup_drop"),
         "active": s.get("active", True),
-        "items": [{"id": str(i.get("_id", i.get("id", ""))), "name": i["name"], "price": i["price"], "category": i.get("category", "unisex")} for i in _sorted_items(s.get("items", []))],
+        "items": [{"id": str(i.get("_id", i.get("id", ""))), "name": i["name"], "price": i["price"], "category": i.get("category", "unisex"), "image_url": i.get("image_url")} for i in _sorted_items(s.get("items", []))],
     } for s in services]
 
 

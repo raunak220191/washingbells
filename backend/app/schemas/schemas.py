@@ -109,6 +109,7 @@ class ServiceItemResponse(BaseModel):
     price: float
     icon: Optional[str] = None
     category: str = "unisex"  # men | women | kids | unisex
+    image_url: Optional[str] = None  # single image per item (see routers/items.py)
 
 
 class ServiceResponse(BaseModel):

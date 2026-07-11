@@ -35,6 +35,7 @@ def _format_service(svc: dict) -> ServiceResponse:
                 price=item["price"],
                 icon=item.get("icon"),
                 category=item.get("category", "unisex"),
+                image_url=item.get("image_url"),
             )
         )
     return ServiceResponse(

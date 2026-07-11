@@ -6,7 +6,7 @@ from app.routers import (
     auth, users, addresses, services, cart, orders, payments,
     banners, testimonials, stores, referrals, coupons, wallet,
     delivery, store_ops, admin, upload, terms, notifications, email_admin,
-    email_public, inbox, admin_db,
+    email_public, inbox, admin_db, items,
 )
 
 
@@ -120,6 +120,7 @@ app.include_router(email_admin.router, prefix="/api/v1")
 app.include_router(email_public.router, prefix="/api/v1")
 app.include_router(inbox.router, prefix="/api/v1")
 app.include_router(admin_db.router, prefix="/api/v1")
+app.include_router(items.router, prefix="/api/v1")
 
 
 @app.get("/")
