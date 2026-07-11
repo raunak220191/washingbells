@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -66,6 +66,14 @@ export default function CategoryScreen() {
     }
   };
 
+  // TASK 4.1: alphabetical within the category — memoized, never mutates the
+  // fetched array in place.
+  const sortedRows = useMemo(
+    () => [...rows].sort((a, b) =>
+      (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })),
+    [rows]
+  );
+
   const getQty = (key) => quantities[key] || 0;
   const setQty = (key, qty) => setQuantities((p) => ({ ...p, [key]: Math.max(0, qty) }));
 
@@ -130,7 +138,7 @@ export default function CategoryScreen() {
         </View>
       ) : (
         <FlatList
-          data={rows}
+          data={sortedRows}
           keyExtractor={(r) => r.key}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.listContent}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View,
   Text,
@@ -9,8 +9,9 @@ import {
   Alert,
 } from "react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { COLORS, SPACING, RADIUS, TYPE } from "../../../../constants/theme";
-import { filtersFor, matches } from "../../../../constants/categories";
+import { Ionicons } from "@expo/vector-icons";
+import { COLORS, SPACING, RADIUS, TYPE, ICON } from "../../../../constants/theme";
+import { filtersFor, matches, categoryLabel } from "../../../../constants/categories";
 import { useCartStore } from "../../../../stores/cartStore";
 import QuantityStepper from "../../../../components/common/QuantityStepper";
 import Button from "../../../../components/common/Button";
@@ -19,6 +20,7 @@ import Header from "../../../../components/common/Header";
 import Chip, { ChipRow } from "../../../../components/common/Chip";
 import BottomBar from "../../../../components/common/BottomBar";
 import ItemThumb from "../../../../components/common/ItemThumb";
+import SearchBar from "../../../../components/common/SearchBar";
 import api from "../../../../lib/api";
 
 export default function ServiceDetailScreen() {
@@ -33,6 +35,15 @@ export default function ServiceDetailScreen() {
   // Men/Women/Kids filter — "all" shows everything; a specific filter also
   // keeps unisex items visible so nothing is hidden.
   const [categoryFilter, setCategoryFilter] = useState("all");
+  // TASK 4.2: debounced item search — while active, a flat match list across
+  // ALL categories replaces the chip-filtered list; clearing restores it.
+  const [query, setQuery] = useState("");
+  const [debouncedQuery, setDebouncedQuery] = useState("");
+
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQuery(query), 250);
+    return () => clearTimeout(t);
+  }, [query]);
 
   useEffect(() => {
     loadService();
@@ -71,9 +82,34 @@ export default function ServiceDetailScreen() {
   // Chips + filter logic come from the centralized category list.
   const { chips: CATEGORY_FILTERS, hasCategories } = filtersFor(service?.items || []);
 
-  const visibleItems = (service?.items || []).filter((item) =>
-    matches(item.category, categoryFilter)
-  );
+  // TASK 4.1: alphabetical (case-insensitive, locale-aware) WITHIN each
+  // category; category grouping order stays exactly as the API returns it.
+  // Memoized selector — the fetched array is never mutated in place.
+  const sortedItems = useMemo(() => {
+    const items = service?.items || [];
+    const groups = new Map(); // insertion order preserves category order
+    for (const item of items) {
+      const key = item.category || "unisex";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(item);
+    }
+    const out = [];
+    for (const group of groups.values()) {
+      out.push(...[...group].sort((a, b) =>
+        (a.name || "").localeCompare(b.name || "", undefined, { sensitivity: "base" })));
+    }
+    return out;
+  }, [service]);
+
+  const searchActive = debouncedQuery.trim().length > 0;
+  const visibleItems = useMemo(() => {
+    if (searchActive) {
+      const q = debouncedQuery.trim().toLowerCase();
+      // flat match across ALL categories (chips don't constrain a search)
+      return sortedItems.filter((item) => (item.name || "").toLowerCase().includes(q));
+    }
+    return sortedItems.filter((item) => matches(item.category, categoryFilter));
+  }, [sortedItems, searchActive, debouncedQuery, categoryFilter]);
 
   const handleAddToCart = async () => {
     const itemsToAdd = service.items.filter((item) => getQty(item.id) > 0);
@@ -119,7 +155,13 @@ export default function ServiceDetailScreen() {
             pickup with a weighing scale.
           </Text>
         )}
-        {hasCategories && (
+        <SearchBar
+          value={query}
+          onChange={setQuery}
+          placeholder="Search items"
+          style={styles.search}
+        />
+        {hasCategories && !searchActive && (
           <ChipRow style={styles.chips}>
             {CATEGORY_FILTERS.map((c) => (
               <Chip
@@ -138,6 +180,17 @@ export default function ServiceDetailScreen() {
         keyExtractor={(item) => item.id}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.listContent}
+        keyboardShouldPersistTaps="handled"
+        ListEmptyComponent={
+          searchActive ? (
+            <View style={styles.emptySearch}>
+              <Ionicons name="search-outline" size={ICON.hero} color={COLORS.mintGreen} />
+              <Text style={styles.emptySearchText}>
+                No items found for &ldquo;{debouncedQuery.trim()}&rdquo;
+              </Text>
+            </View>
+          ) : null
+        }
         renderItem={({ item }) => {
           const qty = getQty(item.id);
           return (
@@ -145,6 +198,9 @@ export default function ServiceDetailScreen() {
               <ItemThumb imageUrl={item.image_url} style={styles.itemThumb} />
               <View style={styles.itemInfo}>
                 <Text style={styles.itemName}>{item.name}</Text>
+                {searchActive && (
+                  <Text style={styles.itemCategory}>{categoryLabel(item.category)}</Text>
+                )}
                 <Text style={styles.itemPrice}>
                   ₹{item.price}
                   {service?.pricing_unit === "kg" ? "/kg" : service?.pricing_unit === "pair" ? "/pair" : ""}
@@ -211,6 +267,23 @@ const styles = StyleSheet.create({
     ...TYPE.caption,
     color: COLORS.textLight,
     marginBottom: SPACING.md,
+  },
+  search: {
+    marginBottom: SPACING.md,
+  },
+  itemCategory: {
+    ...TYPE.caption,
+    color: COLORS.textMuted,
+    marginTop: 1,
+  },
+  emptySearch: {
+    alignItems: "center",
+    paddingVertical: SPACING.xxxl,
+    gap: SPACING.md,
+  },
+  emptySearchText: {
+    ...TYPE.body,
+    color: COLORS.textMuted,
   },
   kgStepperWrap: {
     alignItems: "flex-end",
